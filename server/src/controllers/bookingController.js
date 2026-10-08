@@ -192,20 +192,43 @@ exports.updateBookingStatus = async (req, res, next) => {
       const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
       if (memBooking) {
         if (action === 'start') {
+          if (['rejected', 'cancelled'].includes(memBooking.status)) {
+            return res.status(400).json({ success: false, message: 'Cannot start a rejected or cancelled booking.' });
+          }
           memBooking.status = 'started';
           memBooking.startedAt = new Date();
         } else if (action === 'complete') {
+          if (memBooking.status !== 'started') {
+            return res.status(400).json({ success: false, message: 'Booking must be started before completing.' });
+          }
           memBooking.status = 'completed';
           memBooking.completedAt = new Date();
         } else if (action === 'accept') {
+          if (['cancelled', 'rejected', 'completed'].includes(memBooking.status)) {
+            return res.status(400).json({ success: false, message: 'Cannot accept a cancelled or closed booking.' });
+          }
           memBooking.status = 'accepted';
+          memBooking.acceptedAt = new Date();
         } else if (action === 'reject') {
+          if (['completed', 'started'].includes(memBooking.status)) {
+            return res.status(400).json({ success: false, message: 'Cannot reject an active or completed commute.' });
+          }
           memBooking.status = 'rejected';
-        } else if (action === 'cancel') {
-          memBooking.status = 'cancelled';
+          memBooking.rejectedAt = new Date();
           const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
           if (ride) {
-            ride.availableSeats = (ride.availableSeats || 0) + 1;
+            ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
+            if (ride.status === 'full') ride.status = 'active';
+          }
+        } else if (action === 'cancel') {
+          if (memBooking.status === 'completed') {
+            return res.status(400).json({ success: false, message: 'Cannot cancel a completed commute.' });
+          }
+          memBooking.status = 'cancelled';
+          memBooking.cancelledAt = new Date();
+          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          if (ride) {
+            ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
             if (ride.status === 'full') ride.status = 'active';
           }
         } else {
@@ -224,7 +247,6 @@ exports.updateBookingStatus = async (req, res, next) => {
     }
 
     if (!booking) {
-      // Fallback search in store
       const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
       if (memBooking) {
         if (action === 'start') {
@@ -235,13 +257,16 @@ exports.updateBookingStatus = async (req, res, next) => {
           memBooking.completedAt = new Date();
         } else if (action === 'accept') {
           memBooking.status = 'accepted';
+          memBooking.acceptedAt = new Date();
         } else if (action === 'reject') {
           memBooking.status = 'rejected';
+          memBooking.rejectedAt = new Date();
         } else if (action === 'cancel') {
           memBooking.status = 'cancelled';
+          memBooking.cancelledAt = new Date();
           const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
           if (ride) {
-            ride.availableSeats = (ride.availableSeats || 0) + 1;
+            ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
             if (ride.status === 'full') ride.status = 'active';
           }
         }
@@ -258,33 +283,100 @@ exports.updateBookingStatus = async (req, res, next) => {
     }
 
     if (action === 'accept') {
+      if (!isDriver && !req.user?.isAdmin) {
+        return res.status(403).json({ success: false, message: 'Only the route host can accept a seat request.' });
+      }
+      if (['cancelled', 'rejected', 'completed'].includes(booking.status)) {
+        return res.status(400).json({ success: false, message: 'Cannot accept a cancelled or finished booking.' });
+      }
       booking.status = 'accepted';
-      if (booking.ride && booking.ride.availableSeats > 0) {
-        booking.ride.availableSeats -= 1;
+      booking.acceptedAt = new Date();
+    } else if (action === 'reject') {
+      if (!isDriver && !req.user?.isAdmin) {
+        return res.status(403).json({ success: false, message: 'Only the route host can reject a seat request.' });
+      }
+      if (['completed', 'started'].includes(booking.status)) {
+        return res.status(400).json({ success: false, message: 'Cannot reject an ongoing or completed commute.' });
+      }
+      booking.status = 'rejected';
+      booking.rejectedAt = new Date();
+      if (booking.ride) {
+        booking.ride.availableSeats = Math.min(booking.ride.totalSeats || 4, (booking.ride.availableSeats || 0) + 1);
+        if (booking.ride.status === 'full') booking.ride.status = 'active';
         await booking.ride.save();
       }
-    } else if (action === 'reject') {
-      booking.status = 'rejected';
     } else if (action === 'start') {
+      if (['rejected', 'cancelled'].includes(booking.status)) {
+        return res.status(400).json({ success: false, message: 'Cannot start a rejected or cancelled booking.' });
+      }
       booking.status = 'started';
       booking.startedAt = new Date();
     } else if (action === 'complete') {
+      if (booking.status !== 'started') {
+        return res.status(400).json({ success: false, message: 'Commute must be started before completing.' });
+      }
       booking.status = 'completed';
       booking.completedAt = new Date();
       await User.updateMany({ _id: { $in: [booking.passenger, booking.driver] } }, { $inc: { completedRides: 1 } });
     } else if (action === 'cancel') {
+      if (booking.status === 'completed') {
+        return res.status(400).json({ success: false, message: 'Cannot cancel a completed commute.' });
+      }
       if (booking.ride) {
-        booking.ride.availableSeats = (booking.ride.availableSeats || 0) + 1;
+        booking.ride.availableSeats = Math.min(booking.ride.totalSeats || 4, (booking.ride.availableSeats || 0) + 1);
         if (booking.ride.status === 'full') booking.ride.status = 'active';
         await booking.ride.save();
       }
       booking.status = 'cancelled';
+      booking.cancelledAt = new Date();
     } else {
       return res.status(400).json({ success: false, message: 'Invalid action' });
     }
 
     await booking.save();
     res.json({ success: true, message: `Booking status updated to ${booking.status}`, data: booking });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get booking details by ID
+exports.getBookingById = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const userId = String(req.user?._id || req.user?.id || '');
+
+    if (mongoose.connection.readyState !== 1 || String(id).startsWith('bk-')) {
+      const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
+      if (!memBooking) {
+        return res.status(404).json({ success: false, message: 'Booking not found' });
+      }
+      return res.json({ success: true, booking: memBooking });
+    }
+
+    let booking = null;
+    try {
+      booking = await Booking.findById(id)
+        .populate('driver', 'name phone rating userType organization profilePhoto')
+        .populate('passenger', 'name phone rating userType organization profilePhoto')
+        .populate('ride');
+    } catch {
+      // ignore
+    }
+
+    if (!booking) {
+      const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
+      if (memBooking) return res.json({ success: true, booking: memBooking });
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
+    const isDriver = String(booking.driver?._id || booking.driver) === userId;
+    const isPassenger = String(booking.passenger?._id || booking.passenger) === userId;
+    if (!isDriver && !isPassenger && !req.user?.isAdmin) {
+      return res.status(403).json({ success: false, message: 'Not authorized to view this booking' });
+    }
+
+    res.json({ success: true, booking });
   } catch (error) {
     next(error);
   }

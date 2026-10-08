@@ -91,7 +91,6 @@ const vehicleSchema = new mongoose.Schema(
 );
 
 vehicleSchema.index({ owner: 1 });
-vehicleSchema.index({ registrationNumber: 1 });
 
 // Virtual: Display name
 vehicleSchema.virtual('displayName').get(function () {

@@ -14,6 +14,9 @@ const rideRoutes = require('./routes/rideRoutes');
 const bookingRoutes = require('./routes/bookingRoutes');
 const userRoutes = require('./routes/userRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const messageRoutes = require('./routes/messageRoutes');
+const reportRoutes = require('./routes/reportRoutes');
 const { errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -100,6 +103,9 @@ app.use('/api/rides', rideRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/ratings', ratingRoutes);
+app.use('/api/messages', messageRoutes);
+app.use('/api/reports', reportRoutes);
 
 // Error Handler Middleware
 app.use(errorHandler);

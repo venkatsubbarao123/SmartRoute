@@ -137,8 +137,6 @@ const userSchema = new mongoose.Schema(
 
 // 2dsphere index for geospatial queries
 userSchema.index({ location: '2dsphere' });
-userSchema.index({ email: 1 });
-userSchema.index({ phone: 1 });
 
 // Virtual: Full profile completeness
 userSchema.virtual('isVerified').get(function () {

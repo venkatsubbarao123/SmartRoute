@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import api from '../utils/api';
@@ -16,14 +16,48 @@ export const OfferRoute = () => {
   const [vehicleReg, setVehicleReg] = useState('');
   const [origin, setOrigin] = useState(initialFrom);
   const [destination, setDestination] = useState(initialTo);
+  const [departureDate, setDepartureDate] = useState(new Date().toISOString().split('T')[0]);
   const [departureTime, setDepartureTime] = useState('08:15');
   const [seats, setSeats] = useState(1);
   const [mileage, setMileage] = useState(45);
   const [recurring, setRecurring] = useState(true);
   const [costPerSeat, setCostPerSeat] = useState(45);
   const [calculatedDistance, setCalculatedDistance] = useState(null);
+  const [userVehicles, setUserVehicles] = useState([]);
+  const [selectedSavedVehicle, setSelectedSavedVehicle] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isEstimating, setIsEstimating] = useState(false);
+
+  // Fetch user vehicles if logged in
+  useEffect(() => {
+    const fetchVehicles = async () => {
+      const token = localStorage.getItem('smartroute_token');
+      if (!token) return;
+      try {
+        const res = await api.get('/users/vehicles').catch(() => null);
+        if (res?.data?.vehicles && res.data.vehicles.length > 0) {
+          setUserVehicles(res.data.vehicles);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    fetchVehicles();
+  }, []);
+
+  const handleSavedVehicleChange = (vId) => {
+    setSelectedSavedVehicle(vId);
+    if (!vId) return;
+    const v = userVehicles.find((x) => String(x._id || x.id) === String(vId));
+    if (v) {
+      setVehicleType(v.vehicleType || 'bike');
+      setVehicleName(`${v.brand} ${v.model}`);
+      setVehicleReg(v.registrationNumber || '');
+      setMileage(v.mileage || (v.vehicleType === 'bike' ? 45 : 15));
+      setSeats(v.seats || (v.vehicleType === 'bike' ? 1 : 3));
+      handleEstimateCost(origin, destination, v.vehicleType, v.seats, v.mileage);
+    }
+  };
 
   const handleEstimateCost = async (overrideOrigin, overrideDest, overrideType, overrideSeats, overrideMileage) => {
     const from = overrideOrigin || origin;
@@ -33,6 +67,7 @@ export const OfferRoute = () => {
     const vMileage = overrideMileage !== undefined ? overrideMileage : mileage;
 
     if (!from.trim() || !to.trim()) return;
+    if (from.trim().toLowerCase() === to.trim().toLowerCase()) return;
 
     try {
       setIsEstimating(true);
@@ -63,6 +98,11 @@ export const OfferRoute = () => {
       return;
     }
 
+    if (origin.trim().toLowerCase() === destination.trim().toLowerCase()) {
+      toast.error('Origin and Destination cannot be the same location.');
+      return;
+    }
+
     const token = localStorage.getItem('smartroute_token');
     if (!token) {
       toast.error('Please sign in or create an account to offer a route.');
@@ -78,13 +118,14 @@ export const OfferRoute = () => {
         origin,
         destination,
         departureTime,
+        departureDate,
         seats,
         mileage,
         recurring,
         costPerSeat,
       });
       toast.success(res.data?.message || '✅ Ride created successfully!');
-      navigate('/find-route');
+      navigate('/dashboard');
     } catch (err) {
       console.warn('Ride creation note:', err.message);
       const msg = err.response?.data?.message || 'Failed to publish route. Please verify route details.';
@@ -110,6 +151,28 @@ export const OfferRoute = () => {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Saved Vehicles Selection if any */}
+          {userVehicles.length > 0 && (
+            <div className="p-4 bg-slate-950 rounded-2xl border border-blue-500/20 space-y-2">
+              <label htmlFor="saved-vehicle-select" className="text-xs font-bold text-blue-300 block">
+                Quick Select from Your Registered Vehicles
+              </label>
+              <select
+                id="saved-vehicle-select"
+                value={selectedSavedVehicle}
+                onChange={(e) => handleSavedVehicleChange(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+              >
+                <option value="">-- Choose registered vehicle or fill below --</option>
+                {userVehicles.map((v) => (
+                  <option key={v._id || v.id} value={v._id || v.id}>
+                    {v.brand} {v.model} ({v.registrationNumber}) • {v.vehicleType === 'bike' ? '🏍️ Motorcycle' : '🚗 Car'}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           {/* Section 1: Vehicle Selection */}
           <div>
             <label className="text-xs font-bold text-slate-300 block mb-2">
@@ -125,7 +188,7 @@ export const OfferRoute = () => {
                   setMileage(45);
                   handleEstimateCost(origin, destination, 'bike', 1, 45);
                 }}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                   vehicleType === 'bike'
                     ? 'border-blue-500 bg-blue-600/15 text-white shadow-sm'
                     : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700'
@@ -145,7 +208,7 @@ export const OfferRoute = () => {
                   setMileage(15);
                   handleEstimateCost(origin, destination, 'car', 3, 15);
                 }}
-                className={`p-4 rounded-2xl border text-left transition-all ${
+                className={`p-4 rounded-2xl border text-left transition-all cursor-pointer ${
                   vehicleType === 'car'
                     ? 'border-blue-500 bg-blue-600/15 text-white shadow-sm'
                     : 'border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700'
@@ -185,7 +248,7 @@ export const OfferRoute = () => {
                 placeholder="e.g. AP-07-CK-1020"
                 value={vehicleReg}
                 onChange={(e) => setVehicleReg(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500 uppercase"
               />
             </div>
           </div>
@@ -201,38 +264,58 @@ export const OfferRoute = () => {
                 <label htmlFor="route-origin-input" className="text-xs font-medium text-slate-400 block mb-1">
                   Starting Point (Origin)
                 </label>
-                <input
-                  id="route-origin-input"
-                  type="text"
-                  placeholder="e.g. Guntur Bus Station, Guntur"
-                  value={origin}
-                  onChange={(e) => setOrigin(e.target.value)}
-                  onBlur={() => handleEstimateCost(origin, destination, vehicleType, seats)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-                  required
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-blue-400">🟢</span>
+                  <input
+                    id="route-origin-input"
+                    type="text"
+                    placeholder="e.g. Guntur Bus Station, Guntur"
+                    value={origin}
+                    onChange={(e) => setOrigin(e.target.value)}
+                    onBlur={() => handleEstimateCost(origin, destination, vehicleType, seats)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
               </div>
 
               <div>
                 <label htmlFor="route-dest-input" className="text-xs font-medium text-slate-400 block mb-1">
                   Destination
                 </label>
-                <input
-                  id="route-dest-input"
-                  type="text"
-                  placeholder="e.g. Benz Circle, Vijayawada"
-                  value={destination}
-                  onChange={(e) => setDestination(e.target.value)}
-                  onBlur={() => handleEstimateCost(origin, destination, vehicleType, seats)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
-                  required
-                />
+                <div className="relative">
+                  <span className="absolute left-3.5 top-2.5 text-rose-400">🔴</span>
+                  <input
+                    id="route-dest-input"
+                    type="text"
+                    placeholder="e.g. Benz Circle, Vijayawada"
+                    value={destination}
+                    onChange={(e) => setDestination(e.target.value)}
+                    onBlur={() => handleEstimateCost(origin, destination, vehicleType, seats)}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3.5 py-2.5 text-sm text-white placeholder-slate-600 focus:outline-none focus:border-blue-500"
+                    required
+                  />
+                </div>
               </div>
             </div>
           </div>
 
           {/* Section 4: Schedule & Contribution */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-4 pt-2">
+            <div>
+              <label htmlFor="departure-date-input" className="text-xs font-medium text-slate-400 block mb-1">
+                Commute Date
+              </label>
+              <input
+                id="departure-date-input"
+                type="date"
+                value={departureDate}
+                onChange={(e) => setDepartureDate(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
+                required
+              />
+            </div>
+
             <div>
               <label htmlFor="departure-time-input" className="text-xs font-medium text-slate-400 block mb-1">
                 Departure Time
@@ -242,7 +325,7 @@ export const OfferRoute = () => {
                 type="time"
                 value={departureTime}
                 onChange={(e) => setDepartureTime(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                 required
               />
             </div>
@@ -262,14 +345,14 @@ export const OfferRoute = () => {
                   setSeats(s);
                   handleEstimateCost(origin, destination, vehicleType, s, mileage);
                 }}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500"
                 required
               />
             </div>
 
             <div>
               <label htmlFor="mileage-input" className="text-xs font-medium text-slate-400 block mb-1">
-                Expected Mileage (km/L)
+                Mileage (km/L)
               </label>
               <input
                 id="mileage-input"
@@ -282,7 +365,7 @@ export const OfferRoute = () => {
                   setMileage(m);
                   handleEstimateCost(origin, destination, vehicleType, seats, m);
                 }}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-blue-400 font-bold focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-blue-400 font-bold focus:outline-none focus:border-blue-500"
                 required
               />
             </div>
@@ -290,11 +373,11 @@ export const OfferRoute = () => {
             <div>
               <div className="flex justify-between items-center mb-1">
                 <label htmlFor="cost-contribution-input" className="text-xs font-medium text-slate-400 block truncate">
-                  Estimated Fuel Share (₹)
+                  Fuel Share (₹)
                 </label>
                 {calculatedDistance && (
                   <span className="text-[10px] text-blue-400 font-mono">
-                    {calculatedDistance} km
+                    {calculatedDistance}km
                   </span>
                 )}
               </div>
@@ -305,7 +388,7 @@ export const OfferRoute = () => {
                 max="2000"
                 value={costPerSeat}
                 onChange={(e) => setCostPerSeat(Number(e.target.value))}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-emerald-400 font-bold focus:outline-none focus:border-blue-500"
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-emerald-400 font-bold focus:outline-none focus:border-blue-500"
                 required
               />
             </div>
@@ -329,9 +412,10 @@ export const OfferRoute = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-600/25 transition cursor-pointer disabled:opacity-50"
+            className="w-full py-3.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg shadow-blue-600/25 transition cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
           >
-            {isSubmitting ? 'Publishing Route...' : 'Publish Shared Route & Open Matching'}
+            <span>🚀</span>
+            <span>{isSubmitting ? 'Publishing Route...' : 'Publish Shared Route & Open Matching'}</span>
           </button>
         </form>
       </div>

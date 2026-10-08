@@ -575,6 +575,44 @@ class DataStore {
     ];
 
     this.bookings = [];
+    this.vehicles = [
+      {
+        _id: 'v-1',
+        owner: 'u-1',
+        brand: 'Honda',
+        model: 'Activa 6G',
+        year: 2023,
+        color: 'Pearl White',
+        vehicleType: 'bike',
+        fuelType: 'petrol',
+        mileage: 50,
+        registrationNumber: 'AP-07-AW-4812',
+        seats: 1,
+        availableSeats: 1,
+        isActive: true,
+        isDefault: true,
+      },
+      {
+        _id: 'v-2',
+        owner: 'u-2',
+        brand: 'Hyundai',
+        model: 'i20 Asta',
+        year: 2022,
+        color: 'Titan Grey',
+        vehicleType: 'car',
+        fuelType: 'petrol',
+        mileage: 16,
+        registrationNumber: 'AP-16-BK-9021',
+        seats: 4,
+        availableSeats: 3,
+        isActive: true,
+        isDefault: true,
+      },
+    ];
+    this.notifications = [];
+    this.messages = [];
+    this.reports = [];
+    this.ratings = [];
   }
 
   getRides() {
@@ -667,15 +705,31 @@ class DataStore {
   }
 
   async searchRides(params = {}) {
-    const { from, to, vehicleType, maxCost, pickupCoords, dropCoords, requestedTime, minMatchScore = 40 } = params;
+    const {
+      from,
+      to,
+      vehicleType,
+      maxCost,
+      minSeats,
+      pickupCoords,
+      dropCoords,
+      requestedTime,
+      minMatchScore = 30,
+      sortBy = 'best_match',
+    } = params;
+
     let results = [...this.rides.filter((r) => r.status === 'active' && r.availableSeats > 0)];
 
     if (vehicleType && vehicleType !== 'all') {
-      results = results.filter((r) => r.vehicle.vehicleType === vehicleType);
+      results = results.filter((r) => r.vehicle?.vehicleType === vehicleType);
     }
 
     if (maxCost) {
       results = results.filter((r) => r.costPerSeat <= Number(maxCost));
+    }
+
+    if (minSeats) {
+      results = results.filter((r) => r.availableSeats >= Number(minSeats));
     }
 
     // Determine geographic search coordinates
@@ -710,8 +764,6 @@ class DataStore {
           searchDrop
         );
 
-        // Strict Incompatible Route Filtering:
-        // Do not return rides that fail the compatibility threshold (e.g. Hyderabad ride for Guntur search)
         if (matchScore.overall >= Number(minMatchScore) && matchScore.pickupProximity >= 10) {
           scoredResults.push({
             ...ride,
@@ -720,10 +772,21 @@ class DataStore {
           });
         }
       }
+      results = scoredResults;
+    }
 
-      // Sort by overall match score descending
-      scoredResults.sort((a, b) => b.matchScore.overall - a.matchScore.overall);
-      return scoredResults;
+    // Apply sorting
+    if (sortBy === 'lowest_contribution' || sortBy === 'lowest_cost') {
+      results.sort((a, b) => a.costPerSeat - b.costPerSeat);
+    } else if (sortBy === 'highest_rated') {
+      results.sort((a, b) => (b.driver?.rating?.average || 5) - (a.driver?.rating?.average || 5));
+    } else if (sortBy === 'closest_route' || sortBy === 'distance') {
+      results.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    } else if (sortBy === 'earliest_departure') {
+      results.sort((a, b) => String(a.departureTime || '').localeCompare(String(b.departureTime || '')));
+    } else {
+      // Default: best match score
+      results.sort((a, b) => (b.matchScore?.overall || 80) - (a.matchScore?.overall || 80));
     }
 
     return results;
@@ -733,6 +796,12 @@ class DataStore {
     const ride = this.rides.find((r) => r._id === bookingData.rideId);
     if (!ride) {
       throw new Error('Requested commute ride not found.');
+    }
+
+    const driverId = String(ride.driver?._id || ride.driver?.id || ride.driver);
+    const userId = String(user?._id || user?.id || '');
+    if (driverId === userId || (user?.name && ride.driver?.name === user.name)) {
+      throw new Error('You are the host of this route. You cannot book your own commute. Please search routes offered by other commuters or sign in with another account.');
     }
 
     if (ride.availableSeats <= 0) {
@@ -747,11 +816,12 @@ class DataStore {
 
     const newBooking = {
       _id: `bk-${Date.now()}`,
-      ride: ride._id,
+      ride: ride,
+      rideId: ride._id,
       passenger: user || { name: 'Verified Commuter', userType: 'student' },
       driver: ride.driver,
       costContribution: ride.costPerSeat, // Authoritative price determined by backend ride
-      status: 'confirmed',
+      status: 'requested',
       pickupLocation: bookingData.pickup || ride.origin.address,
       dropLocation: bookingData.destination || ride.destination.address,
       matchScore: ride.matchScore?.overall || 92,
@@ -804,6 +874,155 @@ class DataStore {
       costShared: 284000 + this.bookings.length * 45,
       distanceKm: 128450,
     };
+  }
+
+  // Vehicle Methods
+  addVehicle(vehicleData, user) {
+    const ownerId = String(user?._id || user?.id || 'u-demo');
+    const newVehicle = {
+      _id: `v-${Date.now()}`,
+      owner: ownerId,
+      brand: vehicleData.brand || 'Honda',
+      model: vehicleData.model || 'Activa',
+      year: Number(vehicleData.year) || 2023,
+      color: vehicleData.color || 'Silver',
+      vehicleType: (vehicleData.vehicleType || 'bike').toLowerCase(),
+      fuelType: (vehicleData.fuelType || 'petrol').toLowerCase(),
+      mileage: Number(vehicleData.mileage) || 45,
+      registrationNumber: (vehicleData.registrationNumber || 'AP-07-XX-9999').toUpperCase(),
+      seats: Number(vehicleData.seats) || 1,
+      availableSeats: Number(vehicleData.availableSeats) || 1,
+      isActive: true,
+      isDefault: Boolean(vehicleData.isDefault),
+      createdAt: new Date(),
+    };
+    this.vehicles.unshift(newVehicle);
+    return newVehicle;
+  }
+
+  getMyVehicles(userId) {
+    const uid = String(userId || '');
+    return this.vehicles.filter((v) => String(v.owner) === uid && v.isActive);
+  }
+
+  updateVehicle(id, updates, userId) {
+    const v = this.vehicles.find((item) => String(item._id) === String(id) && String(item.owner) === String(userId));
+    if (!v) return null;
+    Object.assign(v, updates);
+    return v;
+  }
+
+  deleteVehicle(id, userId) {
+    const v = this.vehicles.find((item) => String(item._id) === String(id) && String(item.owner) === String(userId));
+    if (!v) return false;
+    v.isActive = false;
+    return true;
+  }
+
+  // Notification Methods
+  addNotification({ userId, type, title, message, data = {} }) {
+    const notif = {
+      _id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      user: String(userId),
+      type: type || 'system',
+      title: title || 'Notification',
+      message: message || '',
+      data,
+      isRead: false,
+      readAt: null,
+      createdAt: new Date(),
+    };
+    this.notifications.unshift(notif);
+    return notif;
+  }
+
+  getNotifications(userId) {
+    const uid = String(userId || '');
+    return this.notifications.filter((n) => String(n.user) === uid);
+  }
+
+  markNotificationRead(id, userId) {
+    const notif = this.notifications.find((n) => String(n._id) === String(id) && String(n.user) === String(userId));
+    if (notif) {
+      notif.isRead = true;
+      notif.readAt = new Date();
+    }
+    return notif;
+  }
+
+  markAllNotificationsRead(userId) {
+    const uid = String(userId || '');
+    this.notifications.forEach((n) => {
+      if (String(n.user) === uid) {
+        n.isRead = true;
+        n.readAt = new Date();
+      }
+    });
+    return true;
+  }
+
+  // Messaging Methods
+  getMessages(bookingId) {
+    const bid = String(bookingId || '');
+    return this.messages.filter((m) => String(m.booking) === bid);
+  }
+
+  addMessage({ bookingId, sender, receiver, content, locationData = null }) {
+    const msg = {
+      _id: `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      booking: String(bookingId),
+      sender,
+      receiver,
+      content: content || '',
+      locationData,
+      isRead: false,
+      createdAt: new Date(),
+    };
+    this.messages.push(msg);
+    return msg;
+  }
+
+  // Report Safety Methods
+  createReport({ reporter, reported, reason, description, rideId = null, bookingId = null }) {
+    const rep = {
+      _id: `rep-${Date.now()}`,
+      reporter,
+      reported,
+      reason,
+      description,
+      ride: rideId,
+      booking: bookingId,
+      status: 'pending',
+      createdAt: new Date(),
+    };
+    this.reports.unshift(rep);
+    return rep;
+  }
+
+  getReports() {
+    return this.reports;
+  }
+
+  // Ratings
+  addRating({ rater, ratee, rideId, bookingId, role, overall, comment = '' }) {
+    const rat = {
+      _id: `rat-${Date.now()}`,
+      rater,
+      ratee,
+      ride: rideId,
+      booking: bookingId,
+      role: role || 'co-commuter',
+      overall: Number(overall) || 5,
+      comment,
+      createdAt: new Date(),
+    };
+    this.ratings.unshift(rat);
+    return rat;
+  }
+
+  getUserRatings(userId) {
+    const uid = String(userId || '');
+    return this.ratings.filter((r) => String(r.ratee) === uid);
   }
 }
 

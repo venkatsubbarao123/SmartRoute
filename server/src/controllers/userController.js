@@ -18,22 +18,44 @@ const updateProfile = asyncHandler(async (req, res) => {
 });
 
 const addVehicle = asyncHandler(async (req, res) => {
-  const existingReg = await Vehicle.findOne({ registrationNumber: req.body.registrationNumber.toUpperCase() });
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
+  if (mongoose.connection.readyState !== 1) {
+    const vehicle = store.addVehicle(req.body, req.user);
+    return res.status(201).json({ success: true, message: 'Vehicle added successfully!', vehicle });
+  }
+
+  const existingReg = await Vehicle.findOne({ registrationNumber: req.body.registrationNumber?.toUpperCase() });
   if (existingReg) throw new AppError('A vehicle with this registration number already exists.', 400);
   const vehicle = await Vehicle.create({ ...req.body, owner: req.user._id });
   res.status(201).json({ success: true, message: 'Vehicle added successfully!', vehicle });
 });
 
 const getMyVehicles = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
+  if (mongoose.connection.readyState !== 1) {
+    const vehicles = store.getMyVehicles(req.user?._id || req.user?.id);
+    return res.json({ success: true, count: vehicles.length, vehicles });
+  }
+
   const vehicles = await Vehicle.find({ owner: req.user._id, isActive: true });
   res.json({ success: true, count: vehicles.length, vehicles });
 });
 
 const updateVehicle = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
+  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('v-')) {
+    const updated = store.updateVehicle(req.params.id, req.body, req.user?._id || req.user?.id);
+    if (!updated) throw new AppError('Vehicle not found.', 404);
+    return res.json({ success: true, message: 'Vehicle updated.', vehicle: updated });
+  }
+
   const vehicle = await Vehicle.findById(req.params.id);
   if (!vehicle) throw new AppError('Vehicle not found.', 404);
   if (vehicle.owner.toString() !== req.user._id.toString()) throw new AppError('Not authorized.', 403);
-  const allowedUpdates = ['color', 'year', 'seats', 'documents'];
+  const allowedUpdates = ['color', 'year', 'seats', 'documents', 'isDefault', 'mileage'];
   const updates = {};
   allowedUpdates.forEach((f) => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
   const updated = await Vehicle.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
@@ -41,6 +63,13 @@ const updateVehicle = asyncHandler(async (req, res) => {
 });
 
 const deleteVehicle = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
+  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('v-')) {
+    store.deleteVehicle(req.params.id, req.user?._id || req.user?.id);
+    return res.json({ success: true, message: 'Vehicle removed.' });
+  }
+
   const vehicle = await Vehicle.findById(req.params.id);
   if (!vehicle) throw new AppError('Vehicle not found.', 404);
   if (vehicle.owner.toString() !== req.user._id.toString()) throw new AppError('Not authorized.', 403);
@@ -57,6 +86,14 @@ const getUserById = asyncHandler(async (req, res) => {
 });
 
 const getNotifications = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
+  if (mongoose.connection.readyState !== 1) {
+    const list = store.getNotifications(req.user?._id || req.user?.id);
+    const unreadCount = list.filter((n) => !n.isRead).length;
+    return res.json({ success: true, count: list.length, total: list.length, unreadCount, page: 1, pages: 1, notifications: list });
+  }
+
   const { page = 1, limit = 20, unreadOnly } = req.query;
   const filter = { user: req.user._id };
   if (unreadOnly === 'true') filter.isRead = false;
@@ -70,7 +107,19 @@ const getNotifications = asyncHandler(async (req, res) => {
 });
 
 const markNotificationRead = asyncHandler(async (req, res) => {
+  const mongoose = require('mongoose');
+  const store = require('../services/dataStore');
   const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || String(id).startsWith('notif-')) {
+    if (id === 'all') {
+      store.markAllNotificationsRead(req.user?._id || req.user?.id);
+      return res.json({ success: true, message: 'All notifications marked as read.' });
+    }
+    const notif = store.markNotificationRead(id, req.user?._id || req.user?.id);
+    return res.json({ success: true, message: 'Notification marked as read.', notification: notif });
+  }
+
   if (id === 'all') {
     await Notification.updateMany({ user: req.user._id, isRead: false }, { isRead: true, readAt: new Date() });
     return res.json({ success: true, message: 'All notifications marked as read.' });

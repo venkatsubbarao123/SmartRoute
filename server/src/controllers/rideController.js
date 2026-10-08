@@ -577,27 +577,59 @@ const completeRide = asyncHandler(async (req, res) => {
  */
 const getMyRides = asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 10 } = req.query;
+  const userId = String(req.user?._id || req.user?.id || '');
+
+  if (mongoose.connection.readyState !== 1) {
+    const myRides = (store.rides || []).filter((r) => {
+      const driverId = String(r.driver?._id || r.driver?.id || r.driver || '');
+      return driverId === userId || r.driver?.name === req.user?.name;
+    });
+    return res.json({
+      success: true,
+      count: myRides.length,
+      total: myRides.length,
+      page: 1,
+      pages: 1,
+      rides: myRides,
+    });
+  }
+
   const filter = { driver: req.user._id };
   if (status) filter.status = status;
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
-  const [rides, total] = await Promise.all([
-    Ride.find(filter)
-      .populate('vehicle')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit)),
-    Ride.countDocuments(filter),
-  ]);
+  try {
+    const [rides, total] = await Promise.all([
+      Ride.find(filter)
+        .populate('vehicle')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Ride.countDocuments(filter),
+    ]);
 
-  res.json({
-    success: true,
-    count: rides.length,
-    total,
-    page: parseInt(page),
-    pages: Math.ceil(total / parseInt(limit)),
-    rides,
-  });
+    res.json({
+      success: true,
+      count: rides.length,
+      total,
+      page: parseInt(page),
+      pages: Math.ceil(total / parseInt(limit)),
+      rides,
+    });
+  } catch (err) {
+    const myRides = (store.rides || []).filter((r) => {
+      const driverId = String(r.driver?._id || r.driver?.id || r.driver || '');
+      return driverId === userId || r.driver?.name === req.user?.name;
+    });
+    return res.json({
+      success: true,
+      count: myRides.length,
+      total: myRides.length,
+      page: 1,
+      pages: 1,
+      rides: myRides,
+    });
+  }
 });
 
 // ─── GET NEARBY RIDES ────────────────────────────────────────────────────────
