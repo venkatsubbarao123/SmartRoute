@@ -53,24 +53,37 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login', onAuthSucces
           toast.error(msg);
         }
       } else {
-        if (!formData.name || !formData.email || !formData.password) {
-          toast.error('Please fill in all required fields');
+        if (!formData.name || !formData.email || !formData.password || !formData.phone) {
+          toast.error('Please fill in all fields (Name, Email, Phone, Password)');
+          setSubmitting(false);
+          return;
+        }
+
+        const cleanPhone = formData.phone.replace(/[\s\-()]/g, '');
+        if (cleanPhone.length < 10) {
+          toast.error('Please enter a valid 10-digit phone number');
+          setSubmitting(false);
+          return;
+        }
+
+        if (formData.password.length < 8) {
+          toast.error('Password must be at least 8 characters long');
           setSubmitting(false);
           return;
         }
 
         try {
           const payload = {
-            name: formData.name,
-            email: formData.email,
-            phone: formData.phone,
+            name: formData.name.trim(),
+            email: formData.email.trim().toLowerCase(),
+            phone: cleanPhone,
             password: formData.password,
             userType,
             organization: formData.organization,
             department: formData.department,
           };
           const res = await api.post('/auth/register', payload);
-          const { token, user } = res.data;
+          const { token, user } = res.data || {};
           if (token) localStorage.setItem('smartroute_token', token);
           if (user) {
             localStorage.setItem('smartroute_user', JSON.stringify(user));
@@ -78,9 +91,12 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login', onAuthSucces
             onAuthSuccess?.(user);
             toast.success(`Account created! Welcome to SmartRoute, ${user.name}! 🚀`);
             onClose();
+          } else {
+            toast.success('Registration successful! Please sign in.');
+            setMode('login');
           }
         } catch (apiErr) {
-          const msg = apiErr.response?.data?.message || 'Registration failed. Please check details and try again.';
+          const msg = apiErr.response?.data?.message || apiErr.message || 'Registration failed. Please check details and try again.';
           toast.error(msg);
         }
       }
@@ -209,6 +225,7 @@ export const AuthModal = ({ isOpen, onClose, initialMode = 'login', onAuthSucces
                     value={formData.phone}
                     onChange={handleChange}
                     className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+                    required
                   />
                 </div>
               </div>

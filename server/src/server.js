@@ -119,10 +119,8 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = process.env.PORT || 5000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/smartroute';
-
-mongoose.set('bufferCommands', false);
+const PORT = env.PORT || 5000;
+const MONGO_URI = env.MONGO_URI || 'mongodb://127.0.0.1:27017/smartroute';
 
 const startServer = (mode = 'Online') => {
   if (!server.listening) {
@@ -136,15 +134,15 @@ mongoose.connection.on('error', (err) => {
   console.warn('⚠️ Mongoose connection note:', err.message);
 });
 
-// Connect to MongoDB with graceful fallback
+// Connect to MongoDB Atlas with production-grade timeout & fallback
 mongoose
   .connect(MONGO_URI, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
-    serverSelectionTimeoutMS: 2000,
+    serverSelectionTimeoutMS: 15000,
+    socketTimeoutMS: 45000,
+    connectTimeoutMS: 15000,
   })
-  .then(() => {
-    console.log('✅ Connected to MongoDB successfully');
+  .then((conn) => {
+    console.log(`✅ MongoDB connected: ${conn.connection.host}`);
     startServer('MongoDB Connected');
   })
   .catch((err) => {

@@ -71,15 +71,19 @@ export const AuthProvider = ({ children }) => {
   const register = useCallback(async (userData) => {
     try {
       const res = await api.post('/auth/register', userData);
-      const { token: newToken, user: newUser } = res.data;
-      localStorage.setItem('smartroute_token', newToken);
-      localStorage.setItem('smartroute_user', JSON.stringify(newUser));
-      setToken(newToken);
-      setUser(newUser);
-      toast.success(`Welcome to SmartRoute, ${newUser.name}! 🚀`);
+      const { token: newToken, user: newUser } = res.data || {};
+      if (newToken) {
+        localStorage.setItem('smartroute_token', newToken);
+        setToken(newToken);
+      }
+      if (newUser) {
+        localStorage.setItem('smartroute_user', JSON.stringify(newUser));
+        setUser(newUser);
+        toast.success(`Welcome to SmartRoute, ${newUser.name || 'Commuter'}! 🚀`);
+      }
       return { success: true, user: newUser };
     } catch (err) {
-      const message = err.response?.data?.message || 'Registration failed';
+      const message = err.response?.data?.message || err.message || 'Registration failed';
       toast.error(message);
       return { success: false, error: message };
     }
