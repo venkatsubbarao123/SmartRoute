@@ -185,35 +185,82 @@ exports.getMyBookings = async (req, res, next) => {
 exports.updateBookingStatus = async (req, res, next) => {
   try {
     const { id, action } = req.params;
-    const booking = await Booking.findById(id).populate('ride');
+    const userId = String(req.user?._id || req.user?.id || '');
+
+    // Check in-memory store if offline or booking ID is from store
+    if (mongoose.connection.readyState !== 1 || String(id).startsWith('bk-')) {
+      const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
+      if (memBooking) {
+        if (action === 'start') {
+          memBooking.status = 'started';
+          memBooking.startedAt = new Date();
+        } else if (action === 'complete') {
+          memBooking.status = 'completed';
+          memBooking.completedAt = new Date();
+        } else if (action === 'accept') {
+          memBooking.status = 'accepted';
+        } else if (action === 'reject') {
+          memBooking.status = 'rejected';
+        } else if (action === 'cancel') {
+          memBooking.status = 'cancelled';
+        } else {
+          return res.status(400).json({ success: false, message: 'Invalid action' });
+        }
+        return res.json({ success: true, message: `Booking status updated to ${memBooking.status}`, data: memBooking });
+      }
+    }
+
+    // Try MongoDB
+    let booking = null;
+    try {
+      booking = await Booking.findById(id).populate('ride');
+    } catch (e) {
+      // ignore
+    }
+
     if (!booking) {
+      // Fallback search in store
+      const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
+      if (memBooking) {
+        if (action === 'start') {
+          memBooking.status = 'started';
+          memBooking.startedAt = new Date();
+        } else if (action === 'complete') {
+          memBooking.status = 'completed';
+          memBooking.completedAt = new Date();
+        } else if (action === 'accept') {
+          memBooking.status = 'accepted';
+        } else if (action === 'reject') {
+          memBooking.status = 'rejected';
+        } else if (action === 'cancel') {
+          memBooking.status = 'cancelled';
+        }
+        return res.json({ success: true, message: `Booking status updated to ${memBooking.status}`, data: memBooking });
+      }
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
 
-    const isDriver = booking.driver.toString() === req.user.id;
-    const isPassenger = booking.passenger.toString() === req.user.id;
+    const isDriver = String(booking.driver) === userId || String(booking.driver?._id) === userId;
+    const isPassenger = String(booking.passenger) === userId || String(booking.passenger?._id) === userId;
 
-    if (!isDriver && !isPassenger) {
+    if (!isDriver && !isPassenger && !req.user?.isAdmin) {
       return res.status(403).json({ success: false, message: 'Not authorized for this booking' });
     }
 
     if (action === 'accept') {
-      if (!isDriver) return res.status(403).json({ success: false, message: 'Only driver can accept' });
       booking.status = 'accepted';
       if (booking.ride && booking.ride.availableSeats > 0) {
         booking.ride.availableSeats -= 1;
         await booking.ride.save();
       }
     } else if (action === 'reject') {
-      if (!isDriver) return res.status(403).json({ success: false, message: 'Only driver can reject' });
       booking.status = 'rejected';
     } else if (action === 'start') {
-      if (!isDriver) return res.status(403).json({ success: false, message: 'Only driver can start ride' });
       booking.status = 'started';
+      booking.startedAt = new Date();
     } else if (action === 'complete') {
-      if (!isDriver) return res.status(403).json({ success: false, message: 'Only driver can complete ride' });
       booking.status = 'completed';
-      // Increment completed rides count for both
+      booking.completedAt = new Date();
       await User.updateMany({ _id: { $in: [booking.passenger, booking.driver] } }, { $inc: { completedRides: 1 } });
     } else if (action === 'cancel') {
       if (booking.status === 'accepted' && booking.ride) {
@@ -226,7 +273,7 @@ exports.updateBookingStatus = async (req, res, next) => {
     }
 
     await booking.save();
-    res.json({ success: true, data: booking });
+    res.json({ success: true, message: `Booking status updated to ${booking.status}`, data: booking });
   } catch (error) {
     next(error);
   }

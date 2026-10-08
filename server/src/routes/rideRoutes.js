@@ -11,6 +11,8 @@ router.get('/geocode', rideController.geocodeLocation);
 router.post('/calculate-cost', rideController.calculateCost);
 router.get('/my-rides', protect, rideController.getMyRides);
 router.get('/:id', rideController.getRideById);
+router.put('/:id/start', protect, rideController.startRide);
+router.put('/:id/complete', protect, rideController.completeRide);
 router.put('/:id', protect, rideController.updateRide);
 router.delete('/:id', protect, rideController.cancelRide);
 

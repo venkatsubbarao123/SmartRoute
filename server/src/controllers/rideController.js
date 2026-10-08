@@ -433,9 +433,33 @@ const cancelRide = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const startRide = asyncHandler(async (req, res) => {
+  const io = req.app.get('io');
+  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+    if (memRide) {
+      memRide.status = 'started';
+      memRide.actualStartTime = new Date();
+      (store.bookings || []).forEach((b) => {
+        if (String(b.ride) === String(memRide._id) || String(b.ride?._id) === String(memRide._id)) {
+          b.status = 'started';
+          b.startedAt = new Date();
+        }
+      });
+      if (io) io.to(`ride:${memRide._id}`).emit('ride:started', { rideId: memRide._id, startTime: memRide.actualStartTime });
+      return res.json({ success: true, message: 'Ride started! Passengers have been notified.', ride: memRide });
+    }
+  }
+
   const ride = await Ride.findById(req.params.id);
-  if (!ride) throw new AppError('Ride not found.', 404);
-  if (ride.driver.toString() !== req.user._id.toString()) {
+  if (!ride) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+    if (memRide) {
+      memRide.status = 'started';
+      return res.json({ success: true, message: 'Ride started! Passengers have been notified.', ride: memRide });
+    }
+    throw new AppError('Ride not found.', 404);
+  }
+  if (ride.driver.toString() !== req.user._id.toString() && !req.user?.isAdmin) {
     throw new AppError('Only the driver can start this ride.', 403);
   }
   if (ride.status !== 'active' && ride.status !== 'full') {
@@ -448,7 +472,6 @@ const startRide = asyncHandler(async (req, res) => {
 
   // Update all accepted bookings to started + notify passengers
   const bookings = await Booking.find({ ride: ride._id, status: 'accepted' });
-  const io = req.app.get('io');
 
   for (const booking of bookings) {
     booking.status = 'started';
@@ -467,7 +490,7 @@ const startRide = asyncHandler(async (req, res) => {
     io.to(`ride:${ride._id}`).emit('ride:started', { rideId: ride._id, startTime: ride.actualStartTime });
   }
 
-  res.json({ success: true, message: 'Ride started! Passengers have been notified.' });
+  res.json({ success: true, message: 'Ride started! Passengers have been notified.', ride });
 });
 
 // ─── COMPLETE RIDE ───────────────────────────────────────────────────────────
@@ -478,9 +501,33 @@ const startRide = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const completeRide = asyncHandler(async (req, res) => {
+  const io = req.app.get('io');
+  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+    if (memRide) {
+      memRide.status = 'completed';
+      memRide.actualEndTime = new Date();
+      (store.bookings || []).forEach((b) => {
+        if (String(b.ride) === String(memRide._id) || String(b.ride?._id) === String(memRide._id)) {
+          b.status = 'completed';
+          b.completedAt = new Date();
+        }
+      });
+      if (io) io.to(`ride:${memRide._id}`).emit('ride:completed', { rideId: memRide._id });
+      return res.json({ success: true, message: 'Ride completed! Please rate your passengers.', ride: memRide });
+    }
+  }
+
   const ride = await Ride.findById(req.params.id);
-  if (!ride) throw new AppError('Ride not found.', 404);
-  if (ride.driver.toString() !== req.user._id.toString()) {
+  if (!ride) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+    if (memRide) {
+      memRide.status = 'completed';
+      return res.json({ success: true, message: 'Ride completed! Please rate your passengers.', ride: memRide });
+    }
+    throw new AppError('Ride not found.', 404);
+  }
+  if (ride.driver.toString() !== req.user._id.toString() && !req.user?.isAdmin) {
     throw new AppError('Only the driver can complete this ride.', 403);
   }
   if (ride.status !== 'started') {
@@ -493,7 +540,6 @@ const completeRide = asyncHandler(async (req, res) => {
 
   // Complete all started bookings + prompt ratings
   const bookings = await Booking.find({ ride: ride._id, status: 'started' });
-  const io = req.app.get('io');
 
   for (const booking of bookings) {
     booking.status = 'completed';
@@ -519,7 +565,7 @@ const completeRide = asyncHandler(async (req, res) => {
     io.to(`ride:${ride._id}`).emit('ride:completed', { rideId: ride._id });
   }
 
-  res.json({ success: true, message: 'Ride completed! Please rate your passengers.' });
+  res.json({ success: true, message: 'Ride completed! Please rate your passengers.', ride });
 });
 
 // ─── GET MY RIDES ────────────────────────────────────────────────────────────
