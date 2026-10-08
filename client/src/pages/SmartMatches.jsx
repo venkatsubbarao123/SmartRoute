@@ -134,14 +134,13 @@ export const SmartMatches = ({ user }) => {
         <div className="max-w-3xl space-y-2">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/25 text-blue-300 text-xs font-semibold">
             <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
-            <span>CORE ARCHITECTURE • SMART ROUTE MATCHING ENGINE</span>
+            <span>CORE ARCHITECTURE • "SHARE A SEAT ON THE JOURNEY YOU'RE ALREADY TAKING"</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
             Peer Route Compatibility Engine
           </h1>
           <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
-            Unlike commercial taxi dispatching, SmartRoute matches commuters already traveling on existing 
-            routine trajectories and distributes fair fuel contributions without surge or driver fares.
+            Unlike commercial taxi dispatching, SmartRoute matches commuters who are <strong className="text-slate-200">already traveling</strong> on existing routine trajectories and distributes fair fuel contributions without surge pricing or driver fares.
           </p>
         </div>
       </div>

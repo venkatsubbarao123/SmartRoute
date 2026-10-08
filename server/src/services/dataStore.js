@@ -804,6 +804,10 @@ class DataStore {
       throw new Error('You are the host of this route. You cannot book your own commute. Please search routes offered by other commuters or sign in with another account.');
     }
 
+    if (ride.status === 'cancelled' || ride.status === 'completed') {
+      throw new Error('This planned commute is no longer active. You can only join active, planned routes.');
+    }
+
     if (ride.availableSeats <= 0) {
       throw new Error('No seats available on this route.');
     }

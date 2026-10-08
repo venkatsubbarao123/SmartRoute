@@ -140,13 +140,13 @@ export const OfferRoute = () => {
       <div className="rounded-3xl bg-[#090e1a] border border-slate-800 p-6 sm:p-8 shadow-xl">
         <div className="border-b border-slate-800 pb-4 mb-6">
           <span className="text-xs font-bold text-blue-400 uppercase tracking-wider block">
-            ROUTE HOST PORTAL
+            ROUTE HOST PORTAL • "SHARE A SEAT ON THE JOURNEY YOU'RE ALREADY TAKING"
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
             Offer Available Seats on Your Routine Commute
           </h2>
-          <p className="text-slate-400 text-xs mt-1">
-            Publish your routine travel schedule to share empty seats and split fuel expenses with verified peers.
+          <p className="text-slate-400 text-xs mt-1 leading-relaxed">
+            SmartRoute is strictly for commuters who are <strong className="text-slate-200">already traveling</strong> on this route for their own daily commute (work, college, routine travel). You are not providing a taxi service—you are publishing your planned journey to share empty vehicle seats and split direct fuel costs.
           </p>
         </div>
 

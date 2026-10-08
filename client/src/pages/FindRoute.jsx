@@ -155,13 +155,13 @@ export const FindRoute = () => {
       <div className="rounded-3xl bg-[#090e1a] border border-slate-800 p-6 sm:p-8 shadow-xl space-y-6">
         <div>
           <span className="text-xs font-bold text-blue-400 uppercase tracking-wider block">
-            ROUTE DISCOVERY & MATCHING
+            EXISTING COMMUTE MATCHING • "SHARE A SEAT ON THE JOURNEY YOU'RE ALREADY TAKING"
           </span>
           <h2 className="text-2xl sm:text-3xl font-extrabold text-white mt-1">
             Find Compatible Shared Commutes
           </h2>
-          <p className="text-slate-400 text-xs mt-1">
-            Search for verified commuters traveling along your routine trajectory to split actual fuel expenses.
+          <p className="text-slate-400 text-xs mt-1 max-w-3xl leading-relaxed">
+            Route Hosts on SmartRoute are real commuters who are <strong className="text-slate-200">already traveling</strong> on these routes for their routine commute. Request an available seat on their existing journey to split direct fuel expenses without taxi commissions or surge pricing.
           </p>
         </div>
 

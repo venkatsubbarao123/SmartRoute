@@ -108,8 +108,11 @@ function App() {
                   </div>
                   <span className="font-extrabold text-white text-base tracking-tight">SmartRoute</span>
                 </div>
-                <p className="text-slate-500 text-xs">
-                  Smart Route & Cost Sharing Platform for Daily Commuters.
+                <p className="text-slate-400 text-xs font-medium">
+                  "Share a seat on the journey you're already taking."
+                </p>
+                <p className="text-slate-500 text-[11px]">
+                  Peer-to-peer shared commute & fuel cost sharing platform.
                 </p>
               </div>
 
@@ -124,7 +127,7 @@ function App() {
             </div>
 
             <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
-              <p>© 2026 SmartRoute Mobility Network. Non-commercial peer cost contribution model.</p>
+              <p>© 2026 SmartRoute Mobility Network. Non-commercial peer cost contribution model • "Share a seat on the journey you're already taking."</p>
               <div className="flex gap-4">
                 <span>Enterprise Grade Architecture</span>
                 <span>•</span>

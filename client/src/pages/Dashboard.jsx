@@ -495,6 +495,27 @@ export const Dashboard = ({ user, onOpenAuth }) => {
       {/* TAB: OVERVIEW */}
       {activeTab === 'overview' && (
         <div className="space-y-8">
+          {/* Core Value Proposition Banner */}
+          <div className="p-5 rounded-2xl bg-blue-950/20 border border-blue-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-blue-400 block">
+                PEER COMMUTE PHILOSOPHY
+              </span>
+              <h4 className="text-sm font-bold text-white">
+                "Share a seat on the journey you're already taking."
+              </h4>
+              <p className="text-xs text-slate-400 max-w-2xl leading-relaxed">
+                SmartRoute is a non-commercial carpooling and shared commute platform. Hosts share their existing routines, co-commuters split actual fuel expenses, and zero taxi markups or surge rates are charged.
+              </p>
+            </div>
+            <Link
+              to="/find-route"
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs whitespace-nowrap shadow-md shadow-blue-600/30 transition cursor-pointer"
+            >
+              Find Route →
+            </Link>
+          </div>
+
           {/* Key Metrics Bar */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="p-5 rounded-2xl bg-[#090e1a] border border-slate-800 space-y-1">

@@ -45,6 +45,25 @@ exports.requestRide = async (req, res, next) => {
       });
     }
 
+    // Rule 1: Host must have an active, planned commute
+    if (ride.status === 'cancelled' || ride.status === 'completed') {
+      return res.status(400).json({
+        success: false,
+        message: 'This planned commute is no longer active. In SmartRoute, commuters can only join active, existing routes.',
+      });
+    }
+
+    // Rule 13: Passenger cannot request an unrelated route merely because a vehicle exists
+    if (pickupCoords && dropCoords && calculateMatchScore) {
+      const compatibility = calculateMatchScore(ride, pickupCoords, dropCoords);
+      if (compatibility.overall < 30) {
+        return res.status(400).json({
+          success: false,
+          message: 'Route incompatibility: Your requested trajectory does not overlap with the Host\'s planned commute. SmartRoute is a shared commute platform where co-commuters join existing routes, not an on-demand taxi dispatch service.',
+        });
+      }
+    }
+
     // Existing active request check
     const existing = await Booking.findOne({
       ride: rideId,
