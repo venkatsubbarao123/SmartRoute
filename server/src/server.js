@@ -19,10 +19,27 @@ const { errorHandler } = require('./middleware/errorHandler');
 const app = express();
 const server = http.createServer(app);
 
+// Multi-origin CORS support for local Vite dev ports (5173, 5174) and production
+const allowedOrigins = [
+  env.CORS_ORIGIN,
+  env.CLIENT_URL,
+  'http://localhost:5173',
+  'http://localhost:5174',
+  'http://127.0.0.1:5173',
+  'http://127.0.0.1:5174',
+].filter(Boolean);
+
+const corsOriginValidator = (origin, callback) => {
+  if (!origin || allowedOrigins.includes(origin) || (!env.IS_PRODUCTION && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin))) {
+    return callback(null, true);
+  }
+  return callback(new Error('CORS not allowed from this origin'), false);
+};
+
 // Socket.IO Setup
 const io = new Server(server, {
   cors: {
-    origin: env.SOCKET_CORS_ORIGIN,
+    origin: corsOriginValidator,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     credentials: true,
   },
@@ -49,7 +66,7 @@ const authLimiter = rateLimit({
 
 // Middleware
 app.use(helmet({ crossOriginResourcePolicy: false }));
-app.use(cors({ origin: env.CORS_ORIGIN, credentials: true }));
+app.use(cors({ origin: corsOriginValidator, credentials: true }));
 app.use(express.json({ limit: '20kb' }));
 app.use(express.urlencoded({ extended: true, limit: '20kb' }));
 app.use(morgan('dev'));
