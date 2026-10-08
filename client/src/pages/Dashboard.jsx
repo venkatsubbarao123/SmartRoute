@@ -32,8 +32,10 @@ export const Dashboard = ({ user, onOpenAuth }) => {
 
         // Fetch user's bookings
         const bookingsRes = await api.get('/bookings/my').catch(() => null);
-        if (bookingsRes?.data?.bookings) {
-          setBookings(bookingsRes.data.bookings);
+        const list = bookingsRes?.data?.bookings ||
+          [...(bookingsRes?.data?.data?.asPassenger || []), ...(bookingsRes?.data?.data?.asDriver || [])];
+        if (Array.isArray(list)) {
+          setBookings(list);
         }
       } catch (err) {
         console.warn('Dashboard data fetch:', err.message);
@@ -148,8 +150,11 @@ export const Dashboard = ({ user, onOpenAuth }) => {
     activeUser.organization ||
     'Individual Commuter';
 
-  const upcomingBookings = bookings.filter((b) => b.status === 'confirmed' || b.status === 'accepted' || b.status === 'requested');
-  const pastBookings = bookings.filter((b) => b.status === 'completed');
+  const upcomingBookings = bookings.filter((b) => {
+    const s = String(b.status || '').toLowerCase();
+    return s === 'confirmed' || s === 'accepted' || s === 'requested';
+  });
+  const pastBookings = bookings.filter((b) => String(b.status || '').toLowerCase() === 'completed');
 
   return (
     <div className="min-h-screen py-10 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-8">
@@ -279,7 +284,7 @@ export const Dashboard = ({ user, onOpenAuth }) => {
                 </div>
                 <div className="flex justify-between text-xs text-slate-400 pt-2 border-t border-slate-800/80">
                   <span>{b.ride?.departureTime || 'Scheduled'}</span>
-                  <span className="text-emerald-400 font-bold">Contribution: ₹{b.fare || b.cost || 0}</span>
+                  <span className="text-emerald-400 font-bold">Contribution: ₹{b.costContribution ?? b.fare ?? b.cost ?? 0}</span>
                 </div>
               </div>
             ))

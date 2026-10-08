@@ -35,6 +35,7 @@ export const FindRoute = () => {
       if (res.data?.rides && res.data.rides.length > 0) {
         const mapped = res.data.rides.map((r) => ({
           id: r._id,
+          driverId: r.driver?._id || r.driver?.id || r.driver,
           host: r.driver?.name || 'Verified Commuter',
           userType: r.driver?.userType || 'General',
           institution:
@@ -77,6 +78,19 @@ export const FindRoute = () => {
   });
 
   const handleRequestRoute = async (route) => {
+    const token = localStorage.getItem('smartroute_token');
+    if (!token) {
+      toast.error('Please sign in or create an account to request a seat.');
+      return;
+    }
+
+    const activeUser = JSON.parse(localStorage.getItem('smartroute_user') || '{}');
+    const isOwn = activeUser._id && (String(route.driverId) === String(activeUser._id) || route.host === activeUser.name);
+    if (isOwn) {
+      toast.error('You are the host of this route! To test passenger booking, please choose a route offered by another commuter (e.g. Sarah Jenkins or Priya Sharma).');
+      return;
+    }
+
     try {
       const res = await api.post('/bookings', {
         rideId: route.id,
@@ -86,7 +100,7 @@ export const FindRoute = () => {
 
       if (res.data?.success) {
         setRequestedRoute(route);
-        toast.success(`Request sent to route host ${route.host}! Both parties notified.`);
+        toast.success(`✅ Seat requested successfully! Host ${route.host} notified.`);
         fetchRoutes(); // refresh list to see seat count update
       } else {
         toast.error(res.data?.message || 'Could not request route.');
@@ -289,13 +303,27 @@ export const FindRoute = () => {
                   <span className="text-xl font-black text-emerald-400">₹{route.cost}</span>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => handleRequestRoute(route)}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-blue-600/25 transition cursor-pointer"
-                >
-                  Request Seat
-                </button>
+                {(() => {
+                  const activeUser = JSON.parse(localStorage.getItem('smartroute_user') || '{}');
+                  const isOwn = activeUser._id && (String(route.driverId) === String(activeUser._id) || route.host === activeUser.name);
+                  if (isOwn) {
+                    return (
+                      <span className="px-3 py-1.5 rounded-xl bg-slate-800 text-slate-400 text-xs font-semibold border border-slate-700">
+                        Your Route (Host)
+                      </span>
+                    );
+                  }
+                  return (
+                    <button
+                      type="button"
+                      disabled={route.availableSeats <= 0}
+                      onClick={() => handleRequestRoute(route)}
+                      className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-xs uppercase tracking-wider shadow-md shadow-blue-600/25 transition cursor-pointer"
+                    >
+                      {route.availableSeats <= 0 ? 'Full' : 'Request Seat'}
+                    </button>
+                  );
+                })()}
               </div>
             </motion.div>
           ))}

@@ -751,7 +751,7 @@ class DataStore {
       passenger: user || { name: 'Verified Commuter', userType: 'student' },
       driver: ride.driver,
       costContribution: ride.costPerSeat, // Authoritative price determined by backend ride
-      status: 'CONFIRMED',
+      status: 'confirmed',
       pickupLocation: bookingData.pickup || ride.origin.address,
       dropLocation: bookingData.destination || ride.destination.address,
       matchScore: ride.matchScore?.overall || 92,
