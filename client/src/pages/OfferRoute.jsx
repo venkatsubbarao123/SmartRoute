@@ -63,9 +63,15 @@ export const OfferRoute = () => {
       return;
     }
 
+    const token = localStorage.getItem('smartroute_token');
+    if (!token) {
+      toast.error('Please sign in or create an account to offer a route.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      await api.post('/rides', {
+      const res = await api.post('/rides', {
         vehicleType,
         vehicleName,
         vehicleReg,
@@ -77,11 +83,11 @@ export const OfferRoute = () => {
         recurring,
         costPerSeat,
       });
-      toast.success('Your shared commute route has been published! Compatible commuters will be matched.');
+      toast.success(res.data?.message || '✅ Ride created successfully!');
       navigate('/find-route');
     } catch (err) {
       console.warn('Ride creation note:', err.message);
-      const msg = err.response?.data?.message || 'Failed to publish route. Please sign in and verify route details.';
+      const msg = err.response?.data?.message || 'Failed to publish route. Please verify route details.';
       toast.error(msg);
     } finally {
       setIsSubmitting(false);

@@ -32,7 +32,7 @@ const createRide = asyncHandler(async (req, res) => {
     const newRide = await store.createRide(req.body, req.user);
     return res.status(201).json({
       success: true,
-      message: 'Ride created successfully!',
+      message: '✅ Ride created successfully!',
       ride: newRide,
     });
   }
@@ -46,6 +46,7 @@ const createRide = asyncHandler(async (req, res) => {
     departureTime,
     availableSeats,
     totalSeats,
+    seats,
     recurring,
     preferences,
     notes,
@@ -53,33 +54,100 @@ const createRide = asyncHandler(async (req, res) => {
     duration,
   } = req.body;
 
-  // Estimate cost if not provided
-  let costPerSeat = req.body.costPerSeat;
-  if (!costPerSeat && origin && destination) {
-    const costInfo = estimateTripCost(
-      origin.location.coordinates,
-      destination.location.coordinates,
-      req.body.vehicleType || 'car',
-      availableSeats || 3
-    );
-    costPerSeat = costInfo.costPerSeat;
-  }
+  const originStr = typeof origin === 'string'
+    ? origin
+    : (origin?.address || origin?.name || 'Guntur');
+  const destStr = typeof destination === 'string'
+    ? destination
+    : (destination?.address || destination?.name || 'Vijayawada');
+
+  const rideSeats = Number(availableSeats || totalSeats || seats || 1);
 
   try {
+    // Resolve Vehicle
+    let activeVehicleId = vehicleId;
+    if (!activeVehicleId) {
+      let userVehicle = await Vehicle.findOne({ owner: req.user._id });
+      if (!userVehicle) {
+        userVehicle = await Vehicle.create({
+          owner: req.user._id,
+          type: req.body.vehicleType || 'bike',
+          make: req.body.vehicleName || 'Standard Commuter',
+          model: req.body.vehicleType === 'bike' ? 'Motorcycle' : 'Sedan',
+          registrationNumber: req.body.vehicleReg || `AP-${Date.now().toString().slice(-4)}`,
+          seats: rideSeats + 1,
+          fuelType: req.body.fuelType || 'petrol',
+        });
+      }
+      activeVehicleId = userVehicle._id;
+    }
+
+    // Resolve Origin Coordinates
+    let originData = typeof origin === 'object' && origin.location ? origin : null;
+    if (!originData) {
+      const geo = await routingService.geocode(originStr);
+      originData = {
+        address: originStr,
+        location: {
+          type: 'Point',
+          coordinates: geo?.coordinates || [80.4365, 16.3067],
+        },
+      };
+    }
+
+    // Resolve Destination Coordinates
+    let destData = typeof destination === 'object' && destination.location ? destination : null;
+    if (!destData) {
+      const geo = await routingService.geocode(destStr);
+      destData = {
+        address: destStr,
+        location: {
+          type: 'Point',
+          coordinates: geo?.coordinates || [80.6480, 16.5062],
+        },
+      };
+    }
+
+    // Calculate routing distance if missing
+    let rideDistance = distance;
+    let rideDuration = duration;
+    if (!rideDistance) {
+      const route = await routingService.getRoute(
+        originData.location.coordinates,
+        destData.location.coordinates,
+        originStr,
+        destStr
+      );
+      rideDistance = route?.distanceKm || 35;
+      rideDuration = route?.durationMins || 45;
+    }
+
+    // Cost per seat
+    let costPerSeat = req.body.costPerSeat;
+    if (!costPerSeat) {
+      const costInfo = estimateTripCost(
+        originData.location.coordinates,
+        destData.location.coordinates,
+        req.body.vehicleType || 'bike',
+        rideSeats
+      );
+      costPerSeat = costInfo?.costPerSeat || 45;
+    }
+
     const ride = await Ride.create({
-      driver: req.user?._id,
-      vehicle: vehicleId,
-      origin,
-      destination,
+      driver: req.user._id,
+      vehicle: activeVehicleId,
+      origin: originData,
+      destination: destData,
       waypoints: waypoints || [],
       routeCoordinates: routeCoordinates || [],
-      departureTime,
-      availableSeats: availableSeats || totalSeats,
-      totalSeats,
-      recurring: recurring || { isRecurring: false, days: [] },
-      costPerSeat: costPerSeat || 0,
-      distance: distance || 0,
-      duration: duration || 0,
+      departureTime: departureTime ? new Date(departureTime) : new Date(Date.now() + 3600000),
+      availableSeats: rideSeats,
+      totalSeats: rideSeats,
+      recurring: typeof recurring === 'object' ? recurring : { isRecurring: Boolean(recurring), days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      costPerSeat: Number(costPerSeat),
+      distance: rideDistance,
+      duration: rideDuration,
       preferences: preferences || {},
       notes: notes || '',
     });
@@ -88,16 +156,17 @@ const createRide = asyncHandler(async (req, res) => {
       .populate('driver', 'name rating profilePhoto verification')
       .populate('vehicle');
 
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Ride created successfully!',
+      message: '✅ Ride created successfully!',
       ride: populatedRide,
     });
   } catch (err) {
+    console.warn('MongoDB ride creation note:', err.message, 'falling back to store');
     const newRide = await store.createRide(req.body, req.user);
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
-      message: 'Ride created successfully!',
+      message: '✅ Ride created successfully!',
       ride: newRide,
     });
   }
