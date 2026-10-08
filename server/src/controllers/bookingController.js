@@ -203,6 +203,11 @@ exports.updateBookingStatus = async (req, res, next) => {
           memBooking.status = 'rejected';
         } else if (action === 'cancel') {
           memBooking.status = 'cancelled';
+          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          if (ride) {
+            ride.availableSeats = (ride.availableSeats || 0) + 1;
+            if (ride.status === 'full') ride.status = 'active';
+          }
         } else {
           return res.status(400).json({ success: false, message: 'Invalid action' });
         }
@@ -234,6 +239,11 @@ exports.updateBookingStatus = async (req, res, next) => {
           memBooking.status = 'rejected';
         } else if (action === 'cancel') {
           memBooking.status = 'cancelled';
+          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          if (ride) {
+            ride.availableSeats = (ride.availableSeats || 0) + 1;
+            if (ride.status === 'full') ride.status = 'active';
+          }
         }
         return res.json({ success: true, message: `Booking status updated to ${memBooking.status}`, data: memBooking });
       }
@@ -263,8 +273,9 @@ exports.updateBookingStatus = async (req, res, next) => {
       booking.completedAt = new Date();
       await User.updateMany({ _id: { $in: [booking.passenger, booking.driver] } }, { $inc: { completedRides: 1 } });
     } else if (action === 'cancel') {
-      if (booking.status === 'accepted' && booking.ride) {
-        booking.ride.availableSeats += 1;
+      if (booking.ride) {
+        booking.ride.availableSeats = (booking.ride.availableSeats || 0) + 1;
+        if (booking.ride.status === 'full') booking.ride.status = 'active';
         await booking.ride.save();
       }
       booking.status = 'cancelled';

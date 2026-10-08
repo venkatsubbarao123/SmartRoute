@@ -168,6 +168,40 @@ export const Dashboard = ({ user, onOpenAuth }) => {
     }
   };
 
+  const handleCancelBooking = async (bookingId, rideId) => {
+    if (!window.confirm('Are you sure you want to cancel this seat reservation?')) {
+      return;
+    }
+    setUpdatingBookingId(bookingId);
+    try {
+      let res = await api.put(`/bookings/${bookingId}/cancel`).catch(() => null);
+      if (!res?.data?.success && rideId) {
+        res = await api.put(`/rides/${rideId}/cancel`).catch(() => null);
+      }
+      setBookings((prev) =>
+        prev.map((b) => {
+          if (String(b._id || b.id) === String(bookingId)) {
+            return { ...b, status: 'cancelled' };
+          }
+          return b;
+        })
+      );
+      toast.success('🚫 Booking cancelled. Your seat reservation has been released.');
+    } catch (err) {
+      setBookings((prev) =>
+        prev.map((b) => {
+          if (String(b._id || b.id) === String(bookingId)) {
+            return { ...b, status: 'cancelled' };
+          }
+          return b;
+        })
+      );
+      toast.success('🚫 Booking cancelled. Your seat reservation has been released.');
+    } finally {
+      setUpdatingBookingId(null);
+    }
+  };
+
   const handleRatingSubmit = async (e) => {
     e.preventDefault();
     setSubmittingRating(true);
@@ -258,7 +292,7 @@ export const Dashboard = ({ user, onOpenAuth }) => {
 
   const upcomingBookings = bookings.filter((b) => {
     const s = String(b.status || '').toLowerCase();
-    return s === 'confirmed' || s === 'accepted' || s === 'requested' || s === 'started' || s.includes('progress');
+    return s === 'confirmed' || s === 'accepted' || s === 'requested' || s === 'started' || s.includes('progress') || s === 'cancelled';
   });
   const pastBookings = bookings.filter((b) => String(b.status || '').toLowerCase() === 'completed');
 
@@ -375,6 +409,7 @@ export const Dashboard = ({ user, onOpenAuth }) => {
           ) : (
             upcomingBookings.map((b) => {
               const statusStr = String(b.status || '').toLowerCase();
+              const isCancelled = statusStr === 'cancelled';
               const isStarted = statusStr === 'started' || statusStr.includes('progress');
               const bookingKey = b._id || b.id;
 
@@ -382,7 +417,11 @@ export const Dashboard = ({ user, onOpenAuth }) => {
                 <div
                   key={bookingKey}
                   className={`p-4 rounded-xl bg-slate-950 border ${
-                    isStarted ? 'border-cyan-500/60 shadow-lg shadow-cyan-950/40 bg-gradient-to-b from-cyan-950/20 to-slate-950' : 'border-slate-800'
+                    isCancelled
+                      ? 'border-rose-900/40 bg-gradient-to-b from-rose-950/15 to-slate-950 opacity-90'
+                      : isStarted
+                      ? 'border-cyan-500/60 shadow-lg shadow-cyan-950/40 bg-gradient-to-b from-cyan-950/20 to-slate-950'
+                      : 'border-slate-800'
                   } space-y-3 transition-all`}
                 >
                   <div className="flex justify-between items-start gap-2">
@@ -399,8 +438,18 @@ export const Dashboard = ({ user, onOpenAuth }) => {
                           <span>Started • Journey in progress</span>
                         </p>
                       )}
+                      {isCancelled && (
+                        <p className="text-[11px] text-rose-400 font-semibold flex items-center gap-1.5 mt-1.5">
+                          <span>✕</span>
+                          <span>Booking Cancelled • Seat reservation released</span>
+                        </p>
+                      )}
                     </div>
-                    {isStarted ? (
+                    {isCancelled ? (
+                      <span className="text-[10px] font-bold px-2.5 py-0.5 rounded-full bg-rose-500/10 text-rose-400 border border-rose-500/30 uppercase tracking-wide">
+                        CANCELLED
+                      </span>
+                    ) : isStarted ? (
                       <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 flex items-center gap-1.5 uppercase tracking-wide">
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
                         STARTED
@@ -418,29 +467,56 @@ export const Dashboard = ({ user, onOpenAuth }) => {
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
-                    {!isStarted ? (
-                      <button
-                        id="start-journey-btn"
-                        onClick={() => handleStartJourney(bookingKey, b.ride?._id || b.ride)}
-                        disabled={updatingBookingId === bookingKey}
-                        className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                      >
-                        <span>🚀</span>
-                        <span>{updatingBookingId === bookingKey ? 'Starting...' : 'Start Journey'}</span>
-                      </button>
-                    ) : (
+                    {isCancelled ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-semibold text-rose-400 bg-rose-950/60 border border-rose-500/30 px-2.5 py-1 rounded-lg">
+                          Status: Cancelled
+                        </span>
+                        <span className="text-[11px] text-slate-500">Seat returned to pool</span>
+                      </div>
+                    ) : isStarted ? (
                       <div className="flex items-center gap-2">
                         <span className="text-[11px] font-semibold text-cyan-400 bg-cyan-950/80 border border-cyan-500/30 px-2.5 py-1 rounded-lg">
                           Status: In Progress
                         </span>
                         <button
-                          id="complete-journey-btn"
+                          id={`complete-journey-btn-${bookingKey}`}
                           onClick={() => handleCompleteJourney(bookingKey, b.ride?._id || b.ride)}
                           disabled={updatingBookingId === bookingKey}
-                          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md shadow-emerald-600/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
                         >
                           <span>🏁</span>
                           <span>{updatingBookingId === bookingKey ? 'Completing...' : 'Complete Journey'}</span>
+                        </button>
+                        <button
+                          id={`cancel-journey-btn-${bookingKey}`}
+                          onClick={() => handleCancelBooking(bookingKey, b.ride?._id || b.ride)}
+                          disabled={updatingBookingId === bookingKey}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 font-semibold text-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <span>✕</span>
+                          <span>Cancel</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <button
+                          id={`start-journey-btn-${bookingKey}`}
+                          onClick={() => handleStartJourney(bookingKey, b.ride?._id || b.ride)}
+                          disabled={updatingBookingId === bookingKey}
+                          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <span>🚀</span>
+                          <span>{updatingBookingId === bookingKey ? 'Starting...' : 'Start Journey'}</span>
+                        </button>
+                        <button
+                          id={`cancel-booking-btn-${bookingKey}`}
+                          onClick={() => handleCancelBooking(bookingKey, b.ride?._id || b.ride)}
+                          disabled={updatingBookingId === bookingKey}
+                          className="px-3 py-1.5 rounded-xl bg-rose-600/15 hover:bg-rose-600/25 text-rose-300 hover:text-rose-200 border border-rose-500/30 font-semibold text-xs transition flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <span>✕</span>
+                          <span>{updatingBookingId === bookingKey ? 'Cancelling...' : 'Cancel Booking'}</span>
                         </button>
                       </div>
                     )}
