@@ -9,7 +9,8 @@ const getMessages = asyncHandler(async (req, res) => {
   const { bookingId } = req.params;
   const userId = String(req.user?._id || req.user?.id || '');
 
-  if (mongoose.connection.readyState !== 1 || String(bookingId).startsWith('bk-')) {
+  const isMock = mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(bookingId) || String(bookingId).startsWith('bk-');
+  if (isMock) {
     const list = store.getMessages(bookingId);
     return res.json({ success: true, count: list.length, messages: list });
   }
@@ -43,7 +44,8 @@ const sendMessage = asyncHandler(async (req, res) => {
     throw new AppError('Message content cannot be empty.', 400);
   }
 
-  if (mongoose.connection.readyState !== 1 || String(bookingId).startsWith('bk-')) {
+  const isMock = mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(bookingId) || String(bookingId).startsWith('bk-');
+  if (isMock) {
     const booking = (store.bookings || []).find((b) => String(b._id || b.id) === String(bookingId));
     let receiverId = 'u-host';
     if (booking) {

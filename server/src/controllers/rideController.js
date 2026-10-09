@@ -334,11 +334,29 @@ const searchRides = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const getRideById = asyncHandler(async (req, res) => {
-  const ride = await Ride.findById(req.params.id)
-    .populate('driver', 'name rating profilePhoto verification phone')
-    .populate('vehicle');
+  const { id } = req.params;
+  let ride = null;
 
-  if (!ride) throw new AppError('Ride not found.', 404);
+  if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(id) && !String(id).startsWith('ride-')) {
+    try {
+      ride = await Ride.findById(id)
+        .populate('driver', 'name rating profilePhoto verification phone')
+        .populate('vehicle');
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!ride) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
+    if (memRide) {
+      const bookings = (store.bookings || []).filter(
+        (b) => String(b.ride?._id || b.ride) === String(id) && ['accepted', 'started'].includes(b.status)
+      );
+      return res.json({ success: true, ride: memRide, bookings });
+    }
+    throw new AppError('Ride not found.', 404);
+  }
 
   // Get accepted bookings for this ride
   const bookings = await Booking.find({ ride: ride._id, status: { $in: ['accepted', 'started'] } })
@@ -355,7 +373,21 @@ const getRideById = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const updateRide = asyncHandler(async (req, res) => {
-  const ride = await Ride.findById(req.params.id);
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
+    if (memRide) {
+      const allowedUpdates = ['departureTime', 'preferences', 'notes', 'costPerSeat', 'waypoints'];
+      allowedUpdates.forEach((field) => {
+        if (req.body[field] !== undefined) memRide[field] = req.body[field];
+      });
+      return res.json({ success: true, message: 'Ride updated.', ride: memRide });
+    }
+    throw new AppError('Ride not found.', 404);
+  }
+
+  const ride = await Ride.findById(id);
   if (!ride) throw new AppError('Ride not found.', 404);
   if (ride.driver.toString() !== req.user._id.toString()) {
     throw new AppError('Not authorized to update this ride.', 403);
@@ -370,7 +402,7 @@ const updateRide = asyncHandler(async (req, res) => {
     if (req.body[field] !== undefined) updates[field] = req.body[field];
   });
 
-  const updatedRide = await Ride.findByIdAndUpdate(req.params.id, updates, {
+  const updatedRide = await Ride.findByIdAndUpdate(id, updates, {
     new: true,
     runValidators: true,
   })
@@ -388,7 +420,25 @@ const updateRide = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const cancelRide = asyncHandler(async (req, res) => {
-  const ride = await Ride.findById(req.params.id);
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
+    if (memRide) {
+      memRide.status = 'cancelled';
+      memRide.cancelReason = req.body.reason || 'Host cancelled the commute.';
+      (store.bookings || []).forEach((b) => {
+        if (String(b.ride?._id || b.ride) === String(id)) {
+          b.status = 'cancelled';
+          b.cancelledAt = new Date();
+        }
+      });
+      return res.json({ success: true, message: 'Ride cancelled. All co-commuters have been notified.' });
+    }
+    throw new AppError('Ride not found.', 404);
+  }
+
+  const ride = await Ride.findById(id);
   if (!ride) throw new AppError('Ride not found.', 404);
   if (ride.driver.toString() !== req.user._id.toString() && !req.user.isAdmin) {
     throw new AppError('Not authorized to cancel this ride.', 403);
@@ -434,8 +484,10 @@ const cancelRide = asyncHandler(async (req, res) => {
  */
 const startRide = asyncHandler(async (req, res) => {
   const io = req.app.get('io');
-  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('ride-')) {
-    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
     if (memRide) {
       memRide.status = 'started';
       memRide.actualStartTime = new Date();
@@ -448,11 +500,12 @@ const startRide = asyncHandler(async (req, res) => {
       if (io) io.to(`ride:${memRide._id}`).emit('ride:started', { rideId: memRide._id, startTime: memRide.actualStartTime });
       return res.json({ success: true, message: 'Ride started! Passengers have been notified.', ride: memRide });
     }
+    throw new AppError('Ride not found.', 404);
   }
 
-  const ride = await Ride.findById(req.params.id);
+  const ride = await Ride.findById(id);
   if (!ride) {
-    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
     if (memRide) {
       memRide.status = 'started';
       return res.json({ success: true, message: 'Ride started! Passengers have been notified.', ride: memRide });
@@ -502,8 +555,10 @@ const startRide = asyncHandler(async (req, res) => {
  */
 const completeRide = asyncHandler(async (req, res) => {
   const io = req.app.get('io');
-  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('ride-')) {
-    const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('ride-')) {
+    const memRide = (store.rides || []).find((r) => String(r._id) === String(id));
     if (memRide) {
       memRide.status = 'completed';
       memRide.actualEndTime = new Date();
@@ -516,9 +571,10 @@ const completeRide = asyncHandler(async (req, res) => {
       if (io) io.to(`ride:${memRide._id}`).emit('ride:completed', { rideId: memRide._id });
       return res.json({ success: true, message: 'Ride completed! Please rate your passengers.', ride: memRide });
     }
+    throw new AppError('Ride not found.', 404);
   }
 
-  const ride = await Ride.findById(req.params.id);
+  const ride = await Ride.findById(id);
   if (!ride) {
     const memRide = (store.rides || []).find((r) => String(r._id) === String(req.params.id));
     if (memRide) {

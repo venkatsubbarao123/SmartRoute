@@ -13,28 +13,61 @@ exports.requestRide = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Authentication required to request a seat.' });
     }
 
-    if (mongoose.connection.readyState !== 1) {
-      if (process.env.NODE_ENV === 'production') {
-        return res.status(503).json({
-          success: false,
-          message: 'Database service is temporarily unavailable. Please try again shortly.',
-        });
-      }
+    const isMockRideId = !mongoose.isValidObjectId(rideId) || String(rideId).startsWith('ride-');
+
+    // 1. If database offline OR non-ObjectId string (like 'ride-6') OR starts with 'ride-'
+    if (mongoose.connection.readyState !== 1 || isMockRideId) {
       try {
+        const memRide = (store.rides || []).find((r) => String(r._id) === String(rideId));
+        if (memRide) {
+          const driverId = String(memRide.driver?._id || memRide.driver?.id || '');
+          const currentUserId = String(req.user?._id || req.user?.id || '');
+          if (driverId === currentUserId || (req.user?.name && memRide.driver?.name === req.user?.name)) {
+            return res.status(400).json({
+              success: false,
+              message: 'You are the host of this route. You cannot book your own commute. Please search routes offered by other commuters or sign in with another account.',
+            });
+          }
+          if ((memRide.availableSeats || 0) <= 0) {
+            return res.status(400).json({ success: false, message: 'No seats available on this route.' });
+          }
+        }
         const booking = store.createBooking({
           rideId,
           pickup: pickupLocation,
           destination: dropLocation,
+          pickupCoords,
+          dropCoords,
         }, req.user);
-        return res.status(201).json({ success: true, message: 'Seat requested successfully!', booking, data: booking });
+        return res.status(201).json({ success: true, message: 'Seat requested successfully! Host notified.', booking, data: booking });
       } catch (storeErr) {
         return res.status(400).json({ success: false, message: storeErr.message });
       }
     }
 
-    const ride = await Ride.findById(rideId).populate('driver');
+    let ride = null;
+    if (mongoose.isValidObjectId(rideId)) {
+      ride = await Ride.findById(rideId).populate('driver');
+    }
+
     if (!ride) {
-      return res.status(404).json({ success: false, message: 'Ride not found' });
+      // Check in-memory store as fallback
+      const memRide = (store.rides || []).find((r) => String(r._id) === String(rideId));
+      if (memRide) {
+        try {
+          const booking = store.createBooking({
+            rideId,
+            pickup: pickupLocation,
+            destination: dropLocation,
+            pickupCoords,
+            dropCoords,
+          }, req.user);
+          return res.status(201).json({ success: true, message: 'Seat requested successfully! Host notified.', booking, data: booking });
+        } catch (storeErr) {
+          return res.status(400).json({ success: false, message: storeErr.message });
+        }
+      }
+      return res.status(404).json({ success: false, message: 'Commute route not found.' });
     }
 
     const driverId = ride.driver?._id ? ride.driver._id.toString() : ride.driver?.toString();
@@ -117,7 +150,7 @@ exports.requestRide = async (req, res, next) => {
       throw bookingErr;
     }
 
-    res.status(201).json({ success: true, message: 'Seat requested successfully!', booking, data: booking });
+    res.status(201).json({ success: true, message: 'Seat requested successfully! Host notified.', booking, data: booking });
   } catch (error) {
     next(error);
   }
@@ -128,56 +161,61 @@ exports.getMyBookings = async (req, res, next) => {
   try {
     const userId = String(req.user._id || req.user.id || '');
 
-    if (mongoose.connection.readyState !== 1) {
-      const allBookings = store.bookings || [];
-      const userBookings = allBookings.filter((b) => {
-        const passId = String(b.passenger?._id || b.passenger?.id || b.passenger || '');
-        const driverId = String(b.driver?._id || b.driver?.id || b.driver || '');
-        return (
-          passId === userId ||
-          driverId === userId ||
-          b.passenger?.name === req.user.name ||
-          b.driver?.name === req.user.name
-        );
-      });
+    let asPassenger = [];
+    let asDriver = [];
 
-      const asPassenger = userBookings.filter(
-        (b) => String(b.passenger?._id || b.passenger?.id || b.passenger || '') === userId || b.passenger?.name === req.user.name
-      );
-      const asDriver = userBookings.filter(
-        (b) => String(b.driver?._id || b.driver?.id || b.driver || '') === userId || b.driver?.name === req.user.name
-      );
+    if (mongoose.connection.readyState === 1) {
+      try {
+        asPassenger = await Booking.find({ passenger: req.user._id || req.user.id })
+          .populate('driver', 'name phone rating userType organization')
+          .populate('ride')
+          .sort('-createdAt');
 
-      return res.json({
-        success: true,
-        count: userBookings.length,
-        bookings: userBookings,
-        data: {
-          asPassenger,
-          asDriver,
-        },
-      });
+        asDriver = await Booking.find({ driver: req.user._id || req.user.id })
+          .populate('passenger', 'name phone rating userType organization')
+          .populate('ride')
+          .sort('-createdAt');
+      } catch (e) {
+        // Fallback gracefully
+      }
     }
 
-    const asPassenger = await Booking.find({ passenger: req.user._id || req.user.id })
-      .populate('driver', 'name phone rating userType organization')
-      .populate('ride')
-      .sort('-createdAt');
+    // Merge in-memory bookings for this user as well (seamless hybrid fallback)
+    const memBookings = (store.bookings || []).filter((b) => {
+      const passId = String(b.passenger?._id || b.passenger?.id || b.passenger || '');
+      const driverId = String(b.driver?._id || b.driver?.id || b.driver || '');
+      return (
+        passId === userId ||
+        driverId === userId ||
+        b.passenger?.name === req.user.name ||
+        b.driver?.name === req.user.name
+      );
+    });
 
-    const asDriver = await Booking.find({ driver: req.user._id || req.user.id })
-      .populate('passenger', 'name phone rating userType organization')
-      .populate('ride')
-      .sort('-createdAt');
+    const memAsPassenger = memBookings.filter(
+      (b) => String(b.passenger?._id || b.passenger?.id || b.passenger || '') === userId || b.passenger?.name === req.user.name
+    );
+    const memAsDriver = memBookings.filter(
+      (b) => String(b.driver?._id || b.driver?.id || b.driver || '') === userId || b.driver?.name === req.user.name
+    );
 
-    const allBookings = [...asPassenger, ...asDriver];
+    const mergedAsPassenger = [
+      ...asPassenger,
+      ...memAsPassenger.filter((mb) => !asPassenger.some((p) => String(p._id) === String(mb._id))),
+    ];
+    const mergedAsDriver = [
+      ...asDriver,
+      ...memAsDriver.filter((md) => !asDriver.some((d) => String(d._id) === String(md._id))),
+    ];
+    const allBookings = [...mergedAsPassenger, ...mergedAsDriver];
 
     res.json({
       success: true,
       count: allBookings.length,
       bookings: allBookings,
       data: {
-        asPassenger,
-        asDriver,
+        asPassenger: mergedAsPassenger,
+        asDriver: mergedAsDriver,
       },
     });
   } catch (error) {
@@ -206,8 +244,10 @@ exports.updateBookingStatus = async (req, res, next) => {
     const { id, action } = req.params;
     const userId = String(req.user?._id || req.user?.id || '');
 
-    // Check in-memory store if offline or booking ID is from store
-    if (mongoose.connection.readyState !== 1 || String(id).startsWith('bk-')) {
+    const isMockBookingId = !mongoose.isValidObjectId(id) || String(id).startsWith('bk-');
+
+    // Check in-memory store if offline or booking ID is from store or not a valid ObjectId
+    if (mongoose.connection.readyState !== 1 || isMockBookingId) {
       const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
       if (memBooking) {
         if (action === 'start') {
@@ -365,7 +405,9 @@ exports.getBookingById = async (req, res, next) => {
     const { id } = req.params;
     const userId = String(req.user?._id || req.user?.id || '');
 
-    if (mongoose.connection.readyState !== 1 || String(id).startsWith('bk-')) {
+    const isMockBookingId = !mongoose.isValidObjectId(id) || String(id).startsWith('bk-');
+
+    if (mongoose.connection.readyState !== 1 || isMockBookingId) {
       const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(id));
       if (!memBooking) {
         return res.status(404).json({ success: false, message: 'Booking not found' });

@@ -21,7 +21,7 @@ const errorHandler = (err, req, res, next) => {
 
   // Mongoose bad ObjectId
   if (err.name === 'CastError') {
-    error.message = `Resource not found with id: ${err.value}`;
+    error.message = `Requested commute route or booking resource was not found. Please refresh and try again.`;
     error.statusCode = 404;
   }
 

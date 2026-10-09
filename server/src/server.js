@@ -164,8 +164,14 @@ mongoose
     socketTimeoutMS: 45000,
     connectTimeoutMS: 15000,
   })
-  .then((conn) => {
+  .then(async (conn) => {
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
+    try {
+      const { seedInitialData } = require('./services/seedService');
+      await seedInitialData();
+    } catch (seedErr) {
+      console.warn('⚠️ Seeding note:', seedErr.message);
+    }
     startServer('MongoDB Connected');
   })
   .catch((err) => {

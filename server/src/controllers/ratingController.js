@@ -11,7 +11,8 @@ const submitRating = asyncHandler(async (req, res) => {
   const { bookingId, overall, categories, comment } = req.body;
   const userId = String(req.user?._id || req.user?.id || '');
 
-  if (mongoose.connection.readyState !== 1 || String(bookingId).startsWith('bk-')) {
+  const isMock = mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(bookingId) || String(bookingId).startsWith('bk-');
+  if (isMock) {
     const memBooking = (store.bookings || []).find((b) => String(b._id || b.id) === String(bookingId));
     let rateeId = 'u-peer';
     let role = 'co-commuter';
