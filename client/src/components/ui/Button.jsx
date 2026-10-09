@@ -13,20 +13,20 @@ const Button = ({
   icon: Icon,
   className = '',
 }) => {
-  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-900';
+  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2';
 
   const variants = {
-    primary: 'bg-blue-600 hover:bg-blue-500 text-white focus:ring-blue-500 shadow-lg shadow-blue-500/25',
-    secondary: 'bg-white/10 hover:bg-white/20 text-white border border-white/20 focus:ring-white/30',
-    danger: 'bg-red-600 hover:bg-red-500 text-white focus:ring-red-500 shadow-lg shadow-red-500/25',
-    success: 'bg-emerald-600 hover:bg-emerald-500 text-white focus:ring-emerald-500',
-    ghost: 'hover:bg-white/10 text-gray-300 hover:text-white focus:ring-white/20',
-    outline: 'border border-blue-500 text-blue-400 hover:bg-blue-500/10 focus:ring-blue-500',
+    primary: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white focus:ring-blue-500 shadow-sm hover:shadow transition-all',
+    secondary: 'bg-gray-100 hover:bg-gray-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-gray-800 dark:text-gray-100 border border-gray-200 dark:border-slate-700 focus:ring-blue-400',
+    danger: 'bg-red-600 hover:bg-red-700 text-white focus:ring-red-500 shadow-sm',
+    success: 'bg-emerald-600 hover:bg-emerald-700 text-white focus:ring-emerald-500 shadow-sm',
+    ghost: 'hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white',
+    outline: 'border border-blue-600 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 dark:text-blue-400 dark:border-blue-500 focus:ring-blue-500',
   };
 
   const sizes = {
-    sm: 'px-3 py-1.5 text-sm',
-    md: 'px-5 py-2.5 text-sm',
+    sm: 'px-3 py-1.5 text-xs',
+    md: 'px-4 sm:px-5 py-2.5 text-xs sm:text-sm',
     lg: 'px-6 py-3 text-base',
     xl: 'px-8 py-4 text-lg',
   };
@@ -36,10 +36,10 @@ const Button = ({
       type={type}
       onClick={onClick}
       disabled={disabled || loading}
-      whileHover={{ scale: disabled || loading ? 1 : 1.03 }}
-      whileTap={{ scale: disabled || loading ? 1 : 0.97 }}
+      whileHover={{ scale: disabled || loading ? 1 : 1.02 }}
+      whileTap={{ scale: disabled || loading ? 1 : 0.98 }}
       className={`
-        ${base} ${variants[variant]} ${sizes[size]}
+        ${base} ${variants[variant] || variants.primary} ${sizes[size] || sizes.md}
         ${fullWidth ? 'w-full' : ''}
         ${disabled || loading ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
         ${className}

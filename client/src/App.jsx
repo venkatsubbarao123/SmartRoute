@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'react-hot-toast';
+import { ThemeProvider, useTheme } from './context/ThemeContext';
 import Navbar from './components/ui/Navbar';
 import AuthModal from './components/auth/AuthModal';
 import Landing from './pages/Landing';
@@ -10,7 +11,10 @@ import SmartMatches from './pages/SmartMatches';
 import Dashboard from './pages/Dashboard';
 import AdminAnalytics from './pages/AdminAnalytics';
 
-function App() {
+function AppContent() {
+  const { theme } = useTheme();
+  const isLight = theme === 'light';
+
   // Real user state initialized from localStorage if available
   const [user, setUser] = useState(() => {
     try {
@@ -45,19 +49,25 @@ function App() {
 
   return (
     <Router>
-      <div className="min-h-screen bg-[#030712] text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      <div
+        className={`min-h-screen flex flex-col font-sans transition-colors duration-200 selection:bg-blue-600 selection:text-white ${
+          isLight ? 'bg-white text-gray-900' : 'bg-[#030712] text-slate-100'
+        }`}
+      >
         {/* Toast notifications */}
         <Toaster
           position="top-right"
           toastOptions={{
             duration: 3500,
             style: {
-              background: '#090e1a',
-              color: '#f8fafc',
-              border: '1px solid rgba(255, 255, 255, 0.1)',
+              background: isLight ? '#ffffff' : '#090e1a',
+              color: isLight ? '#0f172a' : '#f8fafc',
+              border: isLight ? '1px solid #e2e8f0' : '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: '14px',
               fontSize: '13px',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+              boxShadow: isLight
+                ? '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04)'
+                : '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
             },
           }}
         />
@@ -97,36 +107,56 @@ function App() {
         />
 
         {/* Global Footer */}
-        <footer className="border-t border-slate-800/80 bg-[#02050e] py-12 text-xs text-slate-400">
+        <footer
+          className={`border-t py-12 text-xs transition-colors duration-200 ${
+            isLight
+              ? 'border-gray-200 bg-slate-50 text-slate-600'
+              : 'border-slate-800/80 bg-[#02050e] text-slate-400'
+          }`}
+        >
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex flex-col md:flex-row items-center justify-between gap-6">
               {/* Brand Details */}
               <div className="flex flex-col items-center md:items-start space-y-1 text-center md:text-left">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-xs">
+                  <div className="w-6 h-6 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-xs shadow-xs">
                     SR
                   </div>
-                  <span className="font-extrabold text-white text-base tracking-tight">SmartRoute</span>
+                  <span
+                    className={`font-extrabold text-base tracking-tight ${
+                      isLight ? 'text-gray-900' : 'text-white'
+                    }`}
+                  >
+                    SmartRoute
+                  </span>
                 </div>
-                <p className="text-slate-400 text-xs font-medium">
+                <p className={`text-xs font-medium ${isLight ? 'text-gray-700' : 'text-slate-400'}`}>
                   "Share a seat on the journey you're already taking."
                 </p>
-                <p className="text-slate-500 text-[11px]">
+                <p className={`text-[11px] ${isLight ? 'text-gray-500' : 'text-slate-500'}`}>
                   Peer-to-peer shared commute & fuel cost sharing platform.
                 </p>
               </div>
 
               {/* Navigation Links */}
-              <div className="flex flex-wrap items-center justify-center gap-6 text-slate-400 font-medium">
-                <Link to="/" className="hover:text-blue-400 transition">Overview</Link>
-                <Link to="/find-route" className="hover:text-blue-400 transition">Find a Route</Link>
-                <Link to="/offer-route" className="hover:text-blue-400 transition">Offer Seats</Link>
-                <Link to="/smart-matches" className="hover:text-blue-400 transition">Smart Matches</Link>
-                <Link to="/admin" className="hover:text-blue-400 transition">Analytics</Link>
+              <div
+                className={`flex flex-wrap items-center justify-center gap-6 font-medium ${
+                  isLight ? 'text-gray-600' : 'text-slate-400'
+                }`}
+              >
+                <Link to="/" className="hover:text-blue-600 transition">Overview</Link>
+                <Link to="/find-route" className="hover:text-blue-600 transition">Find a Route</Link>
+                <Link to="/offer-route" className="hover:text-blue-600 transition">Offer Seats</Link>
+                <Link to="/smart-matches" className="hover:text-blue-600 transition">Smart Matches</Link>
+                <Link to="/admin" className="hover:text-blue-600 transition">Analytics</Link>
               </div>
             </div>
 
-            <div className="mt-8 pt-8 border-t border-slate-900 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+            <div
+              className={`mt-8 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] ${
+                isLight ? 'border-gray-200 text-gray-500' : 'border-slate-900 text-slate-500'
+              }`}
+            >
               <p>© 2026 SmartRoute Mobility Network. Non-commercial peer cost contribution model • "Share a seat on the journey you're already taking."</p>
               <div className="flex gap-4">
                 <span>Enterprise Grade Architecture</span>
@@ -138,6 +168,14 @@ function App() {
         </footer>
       </div>
     </Router>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 
