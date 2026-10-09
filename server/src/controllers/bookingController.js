@@ -274,7 +274,8 @@ exports.updateBookingStatus = async (req, res, next) => {
           }
           memBooking.status = 'rejected';
           memBooking.rejectedAt = new Date();
-          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          const targetRideId = String(memBooking.ride?._id || memBooking.rideId || memBooking.ride || '');
+          const ride = (store.rides || []).find((r) => String(r._id) === targetRideId);
           if (ride) {
             ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
             if (ride.status === 'full') ride.status = 'active';
@@ -285,7 +286,8 @@ exports.updateBookingStatus = async (req, res, next) => {
           }
           memBooking.status = 'cancelled';
           memBooking.cancelledAt = new Date();
-          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          const targetRideId = String(memBooking.ride?._id || memBooking.rideId || memBooking.ride || '');
+          const ride = (store.rides || []).find((r) => String(r._id) === targetRideId);
           if (ride) {
             ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
             if (ride.status === 'full') ride.status = 'active';
@@ -323,7 +325,8 @@ exports.updateBookingStatus = async (req, res, next) => {
         } else if (action === 'cancel') {
           memBooking.status = 'cancelled';
           memBooking.cancelledAt = new Date();
-          const ride = (store.rides || []).find((r) => String(r._id) === String(memBooking.ride || memBooking.ride?._id));
+          const targetRideId = String(memBooking.ride?._id || memBooking.rideId || memBooking.ride || '');
+          const ride = (store.rides || []).find((r) => String(r._id) === targetRideId);
           if (ride) {
             ride.availableSeats = Math.min((ride.totalSeats || 4), (ride.availableSeats || 0) + 1);
             if (ride.status === 'full') ride.status = 'active';

@@ -177,6 +177,36 @@ async function main() {
     assert.strictEqual(mockBooking.status, 'completed');
   });
 
+  runTest('Booking cancellation restores route available seats', () => {
+    const bookingCtrl = require('./src/controllers/bookingController');
+    const ride = store.rides[1]; // ride-2
+    const initialSeats = ride.availableSeats;
+
+    const passenger = { _id: 'u-cancel-test', name: 'Cancel Test Commuter', userType: 'student' };
+    const booking = store.createBooking(
+      { rideId: ride._id, pickup: 'Origin Point', destination: 'Dest Point' },
+      passenger
+    );
+    assert.strictEqual(ride.availableSeats, initialSeats - 1, 'Seat should decrement on request');
+
+    // Simulate cancel request via controller
+    const reqCancel = {
+      user: passenger,
+      params: { id: booking._id, action: 'cancel' }
+    };
+    let jsonResult = null;
+    const resCancel = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(data) { jsonResult = data; return this; }
+    };
+
+    bookingCtrl.updateBookingStatus(reqCancel, resCancel, () => {});
+    assert.strictEqual(resCancel.statusCode, 200);
+    assert.strictEqual(jsonResult?.data?.status, 'cancelled');
+    assert.strictEqual(ride.availableSeats, initialSeats, 'Seat should be restored upon cancellation');
+  });
+
   // ─── 6. MONGOOSE SCHEMA & MODEL INTEGRITY ──────────────────────
   console.log('\n--- 6. Mongoose Models Integrity ---');
   runTest('Models compile cleanly without schema registration errors', () => {
