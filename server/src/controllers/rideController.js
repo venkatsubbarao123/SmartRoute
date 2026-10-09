@@ -71,11 +71,14 @@ const createRide = asyncHandler(async (req, res) => {
       if (!userVehicle) {
         userVehicle = await Vehicle.create({
           owner: req.user._id,
-          type: req.body.vehicleType || 'bike',
-          make: req.body.vehicleName || 'Standard Commuter',
-          model: req.body.vehicleType === 'bike' ? 'Motorcycle' : 'Sedan',
-          registrationNumber: req.body.vehicleReg || `AP-${Date.now().toString().slice(-4)}`,
+          vehicleType: req.body.vehicleType || 'bike',
+          brand: req.body.vehicleName || (req.body.vehicleType === 'bike' ? 'Hero' : 'Hyundai'),
+          model: req.body.vehicleType === 'bike' ? 'Splendor Plus' : 'i20',
+          year: new Date().getFullYear(),
+          color: 'Silver',
+          registrationNumber: (req.body.vehicleReg || `AP-${Date.now().toString().slice(-4)}`).toUpperCase(),
           seats: rideSeats + 1,
+          mileage: Number(req.body.mileage || (req.body.vehicleType === 'bike' ? 45 : 15)),
           fuelType: req.body.fuelType || 'petrol',
         });
       }
@@ -134,6 +137,34 @@ const createRide = asyncHandler(async (req, res) => {
       costPerSeat = costInfo?.costPerSeat || 45;
     }
 
+    // Safely parse departure date & time
+    const departureDate = req.body.departureDate;
+    let finalDepartureTime = new Date();
+    if (departureDate && departureTime && typeof departureTime === 'string' && !departureTime.includes('T') && departureTime.includes(':')) {
+      const combined = new Date(`${departureDate}T${departureTime.trim()}:00`);
+      finalDepartureTime = isNaN(combined.getTime()) ? new Date(Date.now() + 3600000) : combined;
+    } else if (departureTime) {
+      const parsed = new Date(departureTime);
+      finalDepartureTime = isNaN(parsed.getTime()) ? new Date(Date.now() + 3600000) : parsed;
+    } else {
+      finalDepartureTime = new Date(Date.now() + 3600000);
+    }
+
+    // Normalize recurring days to schema enum
+    const dayMap = {
+      mon: 'monday', tue: 'tuesday', wed: 'wednesday', thu: 'thursday', fri: 'friday', sat: 'saturday', sun: 'sunday',
+      monday: 'monday', tuesday: 'tuesday', wednesday: 'wednesday', thursday: 'thursday', friday: 'friday', saturday: 'saturday', sunday: 'sunday'
+    };
+    let recurringConfig = { isRecurring: false, days: [] };
+    if (recurring) {
+      const isRec = typeof recurring === 'object' ? Boolean(recurring.isRecurring) : Boolean(recurring);
+      let days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'];
+      if (typeof recurring === 'object' && Array.isArray(recurring.days)) {
+        days = recurring.days.map(d => dayMap[String(d).toLowerCase()] || String(d).toLowerCase()).filter(Boolean);
+      }
+      recurringConfig = { isRecurring: isRec, days };
+    }
+
     const ride = await Ride.create({
       driver: req.user._id,
       vehicle: activeVehicleId,
@@ -141,10 +172,10 @@ const createRide = asyncHandler(async (req, res) => {
       destination: destData,
       waypoints: waypoints || [],
       routeCoordinates: routeCoordinates || [],
-      departureTime: departureTime ? new Date(departureTime) : new Date(Date.now() + 3600000),
+      departureTime: finalDepartureTime,
       availableSeats: rideSeats,
       totalSeats: rideSeats,
-      recurring: typeof recurring === 'object' ? recurring : { isRecurring: Boolean(recurring), days: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'] },
+      recurring: recurringConfig,
       costPerSeat: Number(costPerSeat),
       distance: rideDistance,
       duration: rideDuration,
@@ -634,58 +665,46 @@ const completeRide = asyncHandler(async (req, res) => {
 const getMyRides = asyncHandler(async (req, res) => {
   const { status, page = 1, limit = 10 } = req.query;
   const userId = String(req.user?._id || req.user?.id || '');
-
-  if (mongoose.connection.readyState !== 1) {
-    const myRides = (store.rides || []).filter((r) => {
-      const driverId = String(r.driver?._id || r.driver?.id || r.driver || '');
-      return driverId === userId || r.driver?.name === req.user?.name;
-    });
-    return res.json({
-      success: true,
-      count: myRides.length,
-      total: myRides.length,
-      page: 1,
-      pages: 1,
-      rides: myRides,
-    });
-  }
-
-  const filter = { driver: req.user._id };
-  if (status) filter.status = status;
-
   const skip = (parseInt(page) - 1) * parseInt(limit);
-  try {
-    const [rides, total] = await Promise.all([
-      Ride.find(filter)
-        .populate('vehicle')
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      Ride.countDocuments(filter),
-    ]);
 
-    res.json({
-      success: true,
-      count: rides.length,
-      total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit)),
-      rides,
-    });
-  } catch (err) {
-    const myRides = (store.rides || []).filter((r) => {
-      const driverId = String(r.driver?._id || r.driver?.id || r.driver || '');
-      return driverId === userId || r.driver?.name === req.user?.name;
-    });
-    return res.json({
-      success: true,
-      count: myRides.length,
-      total: myRides.length,
-      page: 1,
-      pages: 1,
-      rides: myRides,
-    });
+  let dbRides = [];
+  let total = 0;
+
+  if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(req.user?._id)) {
+    const filter = { driver: req.user._id };
+    if (status) filter.status = status;
+    try {
+      [dbRides, total] = await Promise.all([
+        Ride.find(filter)
+          .populate('vehicle')
+          .sort({ createdAt: -1 })
+          .skip(skip)
+          .limit(parseInt(limit)),
+        Ride.countDocuments(filter),
+      ]);
+    } catch {
+      // fallback gracefully
+    }
   }
+
+  const memRides = (store.rides || []).filter((r) => {
+    const driverId = String(r.driver?._id || r.driver?.id || r.driver || '');
+    return driverId === userId || r.driver?.name === req.user?.name;
+  });
+
+  const mergedRides = [
+    ...dbRides,
+    ...memRides.filter((mr) => !dbRides.some((dr) => String(dr._id) === String(mr._id))),
+  ];
+
+  res.json({
+    success: true,
+    count: mergedRides.length,
+    total: total + memRides.length,
+    page: parseInt(page),
+    pages: Math.max(1, Math.ceil((total + memRides.length) / parseInt(limit))),
+    rides: mergedRides,
+  });
 });
 
 // ─── GET NEARBY RIDES ────────────────────────────────────────────────────────

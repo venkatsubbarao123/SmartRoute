@@ -26,11 +26,19 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const requestUrl = error.config?.url || '';
+    const isAuthEndpoint = requestUrl.includes('/auth/login') || requestUrl.includes('/auth/register');
+
+    if (error.response?.status === 401 && !isAuthEndpoint) {
+      const hadToken = Boolean(localStorage.getItem('smartroute_token'));
       localStorage.removeItem('smartroute_token');
       localStorage.removeItem('smartroute_user');
       localStorage.removeItem('smartroute_active_user');
-      window.location.href = '/';
+
+      // Only redirect if they had a token and are not already on a public view
+      if (hadToken && window.location.pathname !== '/' && window.location.pathname !== '/find-route') {
+        window.location.href = '/';
+      }
     }
     return Promise.reject(error);
   }

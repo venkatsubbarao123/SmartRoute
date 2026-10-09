@@ -39,9 +39,14 @@ const protect = async (req, res, next) => {
 
     // Fetch fresh user from DB or in-memory store
     let user;
-    if (mongoose.connection.readyState === 1) {
-      user = await User.findById(decoded.id).select('-password');
-    } else {
+    if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(decoded.id)) {
+      try {
+        user = await User.findById(decoded.id).select('-password');
+      } catch {
+        // ignore
+      }
+    }
+    if (!user) {
       user = store.users.find((u) => u._id === decoded.id || u.email === decoded.id || u.email === decoded.email);
     }
 
@@ -81,7 +86,7 @@ const authorize = (...roles) => {
     }
 
     // Check email verified
-    if (roles.includes('verified') && !req.user.verification.emailVerified) {
+    if (roles.includes('verified') && !req.user.verification?.emailVerified) {
       return res.status(403).json({
         success: false,
         message: 'Please verify your email before accessing this resource.',
@@ -105,7 +110,13 @@ const optionalAuth = async (req, res, next) => {
     if (token) {
       try {
         const decoded = jwt.verify(token, env.JWT_SECRET);
-        const user = await User.findById(decoded.id).select('-password');
+        let user;
+        if (mongoose.connection.readyState === 1 && mongoose.isValidObjectId(decoded.id)) {
+          user = await User.findById(decoded.id).select('-password');
+        }
+        if (!user) {
+          user = store.users.find((u) => u._id === decoded.id || u.email === decoded.id || u.email === decoded.email);
+        }
         if (user && !user.isBlocked) {
           req.user = user;
         }

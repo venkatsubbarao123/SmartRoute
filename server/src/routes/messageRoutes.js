@@ -5,5 +5,9 @@ const { protect } = require('../middleware/auth');
 
 router.get('/:bookingId', protect, messageController.getMessages);
 router.post('/:bookingId', protect, messageController.sendMessage);
+router.post('/', protect, (req, res, next) => {
+  req.params.bookingId = req.params.bookingId || req.body.bookingId;
+  messageController.sendMessage(req, res, next);
+});
 
 module.exports = router;

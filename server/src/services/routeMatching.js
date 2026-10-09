@@ -270,9 +270,13 @@ function calculateMatchScore(ride, pickupCoords, dropCoords, requestedTime = nul
     );
 
     return {
+      route: routeOverlap,
       routeOverlap,
+      time: timeCompatibility,
       timeCompatibility,
+      pickup: pickupProximity,
       pickupProximity,
+      destination: destinationProximity,
       destinationProximity,
       reliability,
       overall: Math.min(100, Math.max(0, overall)), // Clamp to 0-100
@@ -281,9 +285,13 @@ function calculateMatchScore(ride, pickupCoords, dropCoords, requestedTime = nul
     console.error('Error calculating match score:', error);
     // Return a minimal default score on error
     return {
+      route: 0,
       routeOverlap: 0,
+      time: 0,
       timeCompatibility: 0,
+      pickup: 0,
       pickupProximity: 0,
+      destination: 0,
       destinationProximity: 0,
       reliability: 70,
       overall: 0,

@@ -46,31 +46,35 @@ const getMyVehicles = asyncHandler(async (req, res) => {
 const updateVehicle = asyncHandler(async (req, res) => {
   const mongoose = require('mongoose');
   const store = require('../services/dataStore');
-  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('v-')) {
-    const updated = store.updateVehicle(req.params.id, req.body, req.user?._id || req.user?.id);
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('v-')) {
+    const updated = store.updateVehicle(id, req.body, req.user?._id || req.user?.id);
     if (!updated) throw new AppError('Vehicle not found.', 404);
     return res.json({ success: true, message: 'Vehicle updated.', vehicle: updated });
   }
 
-  const vehicle = await Vehicle.findById(req.params.id);
+  const vehicle = await Vehicle.findById(id);
   if (!vehicle) throw new AppError('Vehicle not found.', 404);
   if (vehicle.owner.toString() !== req.user._id.toString()) throw new AppError('Not authorized.', 403);
   const allowedUpdates = ['color', 'year', 'seats', 'documents', 'isDefault', 'mileage'];
   const updates = {};
   allowedUpdates.forEach((f) => { if (req.body[f] !== undefined) updates[f] = req.body[f]; });
-  const updated = await Vehicle.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+  const updated = await Vehicle.findByIdAndUpdate(id, updates, { new: true, runValidators: true });
   res.json({ success: true, message: 'Vehicle updated.', vehicle: updated });
 });
 
 const deleteVehicle = asyncHandler(async (req, res) => {
   const mongoose = require('mongoose');
   const store = require('../services/dataStore');
-  if (mongoose.connection.readyState !== 1 || String(req.params.id).startsWith('v-')) {
-    store.deleteVehicle(req.params.id, req.user?._id || req.user?.id);
+  const { id } = req.params;
+
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(id) || String(id).startsWith('v-')) {
+    store.deleteVehicle(id, req.user?._id || req.user?.id);
     return res.json({ success: true, message: 'Vehicle removed.' });
   }
 
-  const vehicle = await Vehicle.findById(req.params.id);
+  const vehicle = await Vehicle.findById(id);
   if (!vehicle) throw new AppError('Vehicle not found.', 404);
   if (vehicle.owner.toString() !== req.user._id.toString()) throw new AppError('Not authorized.', 403);
   vehicle.isActive = false;

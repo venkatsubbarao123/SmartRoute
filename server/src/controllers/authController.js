@@ -298,11 +298,11 @@ const logout = asyncHandler(async (req, res) => {
  * @access  Private
  */
 const getMe = asyncHandler(async (req, res) => {
-  if (mongoose.connection.readyState !== 1) {
+  if (mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(req.user?._id)) {
     return res.json({ success: true, user: req.user });
   }
   const user = await User.findById(req.user._id);
-  res.json({ success: true, user });
+  res.json({ success: true, user: user || req.user });
 });
 
 // ─── UPDATE PROFILE ──────────────────────────────────────────────────────────

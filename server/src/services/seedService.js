@@ -10,7 +10,7 @@ async function seedInitialData() {
 
     console.log('🌱 Seeding verified commuter routes into MongoDB Atlas...');
 
-    const defaultPassword = await bcrypt.hash('SmartRoute@2026', 10);
+    const defaultPassword = 'SmartRoute@2026';
 
     const usersData = [
       {

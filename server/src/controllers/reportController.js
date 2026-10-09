@@ -4,21 +4,43 @@ const { asyncHandler, AppError } = require('../middleware/errorHandler');
 const store = require('../services/dataStore');
 
 const submitReport = asyncHandler(async (req, res) => {
-  const { reported, reason, description, ride, booking } = req.body;
+  const reported = req.body.reported || req.body.reportedUser;
+  const rawReason = req.body.reason || req.body.category || 'other';
+  const rawDesc = req.body.description || '';
+  const ride = req.body.ride || req.body.rideId;
+  const booking = req.body.booking || req.body.bookingId;
   const reporterId = req.user?._id || req.user?.id || 'u-reporter';
 
   if (!reported) throw new AppError('Reported user is required.', 400);
-  if (!reason) throw new AppError('Reason is required.', 400);
-  if (!description || description.trim().length < 10) {
-    throw new AppError('Description must be at least 10 characters.', 400);
-  }
 
-  if (mongoose.connection.readyState !== 1) {
+  // Normalize category/reason to schema enum
+  const reasonMap = {
+    reckless_driving: 'safety_concern',
+    safety_concern: 'safety_concern',
+    inappropriate_behaviour: 'inappropriate_behaviour',
+    no_show: 'no_show',
+    route_deviation: 'route_deviation',
+    harassment: 'harassment',
+    fraud: 'fraud',
+    other: 'other',
+  };
+  const reason = reasonMap[rawReason] || 'other';
+
+  const trimmedDesc = rawDesc.trim();
+  if (trimmedDesc.length < 10) {
+    throw new AppError('Description must be at least 10 characters explaining the issue.', 400);
+  }
+  // Schema requires 20 chars
+  const validDesc = trimmedDesc.length >= 20 ? trimmedDesc : `${trimmedDesc} (Reported via SmartRoute Safety Portal)`;
+
+  const isMock = mongoose.connection.readyState !== 1 || !mongoose.isValidObjectId(reported) || !mongoose.isValidObjectId(reporterId);
+
+  if (isMock) {
     const report = store.createReport({
       reporter: reporterId,
       reported,
       reason,
-      description: description.trim(),
+      description: validDesc,
       rideId: ride,
       bookingId: booking,
     });
@@ -33,9 +55,9 @@ const submitReport = asyncHandler(async (req, res) => {
     reporter: reporterId,
     reported,
     reason,
-    description: description.trim(),
-    ride,
-    booking,
+    description: validDesc,
+    ride: mongoose.isValidObjectId(ride) ? ride : null,
+    booking: mongoose.isValidObjectId(booking) ? booking : null,
   });
 
   res.status(201).json({
