@@ -1,4 +1,27 @@
 # 🚀 SmartRoute — Peer-to-Peer Route & Fuel Cost Sharing Platform
+SmartRoute — Live Project Links
+
+### 🌐 Frontend — Live Website
+Explore the SmartRoute application:
+
+🔗 [**Open SmartRoute Website**](https://smart-route-two.vercel.app/)
+
+### ⚙️ Backend — Live Server
+Access the deployed backend server:
+
+🔗 [**SmartRoute Backend**](https://smartroute-backend-kjun.onrender.com)
+
+### 🩺 Backend API Health Check
+Check the backend API status:
+
+🔗 [**Check API Health**](https://smartroute-backend-kjun.onrender.com/api/health)
+
+### 💻 GitHub Repository
+Explore the source code and project implementation:
+
+🔗 [**View SmartRoute on GitHub**](https://github.com/venkatsubbarao123/SmartRoute)
+
+---
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Node.js](https://img.shields.io/badge/Node.js-v18%2B-green.svg)](https://nodejs.org/)
